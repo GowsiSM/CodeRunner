@@ -90,11 +90,13 @@ class ContainerPool {
     }
 
     // 2. Force remove ALL containers labeled as coderunner-worker
-    // This catches containers from this session AND previous crashed sessions
     try {
-      await execAsync('docker rm -f $(docker ps -aq --filter label=type=coderunner-worker)');
+      const { stdout } = await execAsync('docker ps -aq --filter label=type=coderunner-worker');
+      if (stdout.trim()) {
+        await execAsync(`docker rm -f ${stdout.trim().replace(/\n/g, ' ')}`);
+      }
     } catch (e) {
-      // Ignore error if no containers found (docker rm fails if list is empty)
+      // Ignore error
     }
     
     console.log('Container Pool Cleaned Up 🧹');

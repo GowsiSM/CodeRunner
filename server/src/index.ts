@@ -166,10 +166,24 @@ app.post('/run', async (req, res) => {
 
 // Start Server
 if (require.main === module) {
+  // Global error handlers to prevent silent exits
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
   containerPool.initialize().then(() => {
     const server = app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`Server running on http://localhost:${PORT}`);
       console.log(`Network access: http://<your-ip-address>:${PORT}`);
+    });
+
+    server.on('error', (err) => {
+      console.error('Server failed to start:', err);
+      process.exit(1);
     });
 
     // Handle graceful shutdown

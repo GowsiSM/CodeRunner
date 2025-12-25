@@ -167,8 +167,9 @@ app.post('/run', async (req, res) => {
 // Start Server
 if (require.main === module) {
   containerPool.initialize().then(() => {
-    const server = app.listen(PORT, () => {
+    const server = app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Network access: http://<your-ip-address>:${PORT}`);
     });
 
     // Handle graceful shutdown

@@ -39,7 +39,7 @@ function getRunCommand(language: string, entryFile: string): string {
   switch(language) {
     case 'python': return `python -u ${entryFile}`; // -u for unbuffered output
     case 'javascript': return `node ${entryFile}`;
-    case 'cpp': return 'g++ -o app *.c *.cpp *.cc *.cxx *.c++ 2>&1 | grep -v "unrecognized command line option" && ./app';
+    case 'cpp': return 'find . -maxdepth 1 \\( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c++" \\) -print0 | xargs -0 g++ -o app && ./app';
     case 'java': {
       const className = entryFile.replace('.java', '');
       return `javac *.java && java ${className}`;

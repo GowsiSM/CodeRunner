@@ -57,11 +57,13 @@ io.on('connection', (socket) => {
   let currentLanguage: string | null = null;
 
   socket.on('run', async (data: { language: string, files: File[] }) => {
+    console.log('[Server] Received run event:', { language: data.language, fileCount: data.files.length });
     const { language, files } = data;
     currentLanguage = language;
 
     const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
     if (!runtimeConfig) {
+      console.log('[Server] Unsupported language:', language);
       socket.emit('output', { type: 'stderr', data: `Error: Unsupported language '${language}'\n` });
       socket.emit('exit', 1);
       return;
@@ -69,6 +71,7 @@ io.on('connection', (socket) => {
 
     // Find entry file
     const entryFile = files.find(f => f.toBeExec);
+    console.log('[Server] Entry file:', entryFile?.name);
     if (!entryFile && language !== 'cpp') {
        socket.emit('output', { type: 'stderr', data: 'Error: No entry file marked for execution.\n' });
        socket.emit('exit', 1);
@@ -78,6 +81,7 @@ io.on('connection', (socket) => {
     let command = '';
     try {
         command = getRunCommand(language, entryFile ? entryFile.name : '');
+        console.log('[Server] Command:', command);
     } catch (e: any) {
         socket.emit('output', { type: 'stderr', data: e.message + '\n' });
         socket.emit('exit', 1);
@@ -87,7 +91,9 @@ io.on('connection', (socket) => {
     // 1. Get container
     try {
       containerId = await containerPool.getContainer(language);
+      console.log('[Server] Got container:', containerId);
     } catch (e) {
+      console.log('[Server] Failed to get container:', e);
       socket.emit('output', { type: 'stderr', data: 'System Error: Failed to acquire container\n' });
       socket.emit('exit', 1);
       return;
@@ -95,6 +101,7 @@ io.on('connection', (socket) => {
 
     const runId = Date.now().toString() + Math.random().toString(36).substring(7);
     tempDir = path.resolve(__dirname, '..', 'temp', `runner-${runId}`);
+    console.log('[Server] Temp dir:', tempDir);
 
     // 2. Write files
     try {
@@ -102,6 +109,7 @@ io.on('connection', (socket) => {
       for (const file of files) {
         const safeName = path.basename(file.name); 
         fs.writeFileSync(path.join(tempDir, safeName), file.content);
+        console.log('[Server] Wrote file:', safeName);
       }
     } catch (err: any) {
       cleanup();
@@ -112,14 +120,17 @@ io.on('connection', (socket) => {
 
     // 3. Copy files
     const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
+    console.log('[Server] Copy command:', cpCommand);
     exec(cpCommand, (cpError) => {
       if (cpError) {
+        console.log('[Server] Copy error:', cpError);
         cleanup();
         socket.emit('output', { type: 'stderr', data: `System Error (Copy): ${cpError.message}\n` });
         socket.emit('exit', 1);
         return;
       }
 
+      console.log('[Server] Files copied, spawning process...');
       // 4. Spawn process
       // Use -i for interactive (keeps stdin open)
       const dockerArgs = [
@@ -129,18 +140,22 @@ io.on('connection', (socket) => {
         containerId!,
         '/bin/sh', '-c', command
       ];
+      console.log('[Server] Docker args:', dockerArgs);
 
       currentProcess = spawn('docker', dockerArgs);
 
       currentProcess.stdout.on('data', (chunk: Buffer) => {
+        console.log('[Server] stdout:', chunk.toString());
         socket.emit('output', { type: 'stdout', data: chunk.toString() });
       });
 
       currentProcess.stderr.on('data', (chunk: Buffer) => {
+        console.log('[Server] stderr:', chunk.toString());
         socket.emit('output', { type: 'stderr', data: chunk.toString() });
       });
 
       currentProcess.on('close', (code: number) => {
+        console.log('[Server] Process exited with code:', code);
         socket.emit('exit', code);
         cleanup();
       });

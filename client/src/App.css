@@ -1,0 +1,10 @@
+/* Resize handle visual feedback */
+.resize-handle-active {
+  background-color: hsl(var(--primary)) !important;
+}
+
+/* Prevent text selection during resize */
+.resizing * {
+  user-select: none !important;
+  pointer-events: none !important;
+}

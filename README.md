@@ -2,21 +2,172 @@
 
 CodeRunner is a centralized code execution platform designed for educational lab environments. Its primary goal is to provide a seamless coding experience for multiple programming languages without requiring students to install compilers, interpreters, or runtime environments on their local machines.
 
-The server hosts a local web application featuring a full-featured code editor. Students can write code, import local files or folders into a temporary workspace, and execute their programs instantly. The code runs securely within isolated Docker containers on the server, and the output is streamed back to the browser.
+The server hosts a full-featured web-based code editor with a file explorer, Monaco Editor, and real-time console output. Students can create files, write code, and execute their programs instantly. The code runs securely within isolated Docker containers on the server, and the output is streamed back to the browser in real-time via WebSockets.
 
 ## ✨ Key Features
 
 - **Zero-Setup Lab Environment**: Students can start coding immediately using just a web browser. No local software installation is required.
-- **Multi-File Project Support**: Unlike simple snippet runners, CodeRunner supports complex projects. You can upload multiple files (e.g., a Python script importing a custom class from another file) and execute them together.
-- **Smart Execution**: The system is designed to handle dependencies between files, ensuring that all necessary context is available during execution.
-- **Secure Sandbox**: All code runs in ephemeral, network-isolated Docker containers, ensuring the host server remains safe from malicious or accidental damage.
+- **Full-Featured Code Editor**: Monaco Editor with syntax highlighting, IntelliSense, and keyboard shortcuts (Ctrl+S to save, Ctrl+Enter to run).
+- **File Explorer**: Create, rename, delete, and organize files and folders in a tree structure.
+- **Multi-File Project Support**: Write complex projects with multiple files and execute them together with dependency resolution.
+- **Real-Time Console Output**: Stream code execution output, errors, and stdin/stdout directly to the browser via WebSockets.
+- **Session Isolation**: Each user's workspace is temporary and automatically cleaned up after the browser is closed.
+- **Smart Auto-Run**: Click run to automatically execute all compatible files together—no file selection needed.
+- **Secure Sandbox**: All code runs in ephemeral, network-isolated Docker containers, ensuring the host server remains safe.
+- **Multi-Language Support**: Python, JavaScript, C++, and Java (more can be added by creating Docker images).
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** (v18 or higher)
+- **Docker** (Must be installed and running)
+- **npm**
+
+### Setup
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone <repo-url>
+   cd CodeRunner
+   ```
+
+2. **Build Docker runtime images:**
+
+   ```bash
+   cd runtimes/python && docker build -t python-runtime .
+   cd ../javascript && docker build -t node-runtime .
+   cd ../java && docker build -t java-runtime .
+   cd ../cpp && docker build -t cpp-runtime .
+   ```
+
+3. **Start the backend server:**
+
+   ```bash
+   cd server
+   npm install
+   npm run dev
+   ```
+
+   Server will run on `http://localhost:3000`
+
+4. **Start the frontend (in a new terminal):**
+
+   ```bash
+   cd client
+   npm install
+   npm run dev
+   ```
+
+   Frontend will be available at `http://localhost:5173` (or the network URL shown)
+
+5. **Access from another machine:**
+   - The frontend displays both local and network URLs
+   - Use the network URL (e.g., `http://192.168.x.x:5173/`) from other machines
+   - The socket will automatically connect to the server using the same IP
 
 ## 📚 Documentation
 
 For detailed information about the project, please refer to the documentation in the `docs/` folder:
 
-- [**Getting Started**](docs/getting-started.md): Installation and setup instructions.
+- [**Getting Started**](docs/getting-started.md): Detailed installation and setup instructions.
 - [**Architecture & Design**](docs/architecture.md): Project structure, execution flow, and security features.
 - [**Tech Stack**](docs/tech-stack.md): Technologies used in the frontend and backend.
+- [**API Documentation**](docs/api.md): WebSocket events and message formats.
 - [**Contributing**](docs/contributing.md): Guidelines for contributing to the project.
 
+## 🏗️ Project Structure
+
+```
+CodeRunner/
+├── client/                    # React Frontend application
+│   ├── src/
+│   │   ├── components/       # React components (CodeEditor, Console, Workspace, etc.)
+│   │   ├── hooks/            # Custom hooks (useSocket)
+│   │   ├── stores/           # Zustand store (useEditorStore)
+│   │   ├── lib/              # Utilities (socket, file-utils, etc.)
+│   │   ├── App.tsx           # Main application layout
+│   │   └── main.tsx          # Entry point
+│   ├── vite.config.ts        # Vite configuration
+│   └── package.json
+├── server/                    # Backend Node.js application
+│   ├── src/
+│   │   ├── index.ts          # Socket.IO server & execution engine
+│   │   ├── pool.ts           # Container pool management
+│   │   └── config.ts         # Configuration settings
+│   ├── temp/                 # Temporary files (gitignored)
+│   ├── tsconfig.json
+│   └── package.json
+├── runtimes/                  # Docker runtime definitions
+│   ├── python/
+│   ├── javascript/
+│   ├── java/
+│   └── cpp/
+├── docs/                      # Documentation
+└── README.md
+```
+
+## 💻 Usage
+
+1. **Create a file:** Click the `+` icon in the Workspace explorer to create a new file
+2. **Write code:** The file opens automatically in the editor. Code syntax highlighting is automatic based on file extension
+3. **Run code:** Click the **Run** button (or Ctrl+Enter) to execute all compatible files
+4. **View output:** Console output appears in the bottom panel in real-time
+5. **Organize files:** Right-click files/folders to rename, delete, or create new items
+
+## 🔧 Configuration
+
+### Backend Configuration
+
+Edit `server/src/config.ts` to modify:
+
+- Server port (default: 3000)
+- Docker runtime images
+- Container pool size
+- Memory and CPU limits
+- Execution timeout
+
+### Frontend Configuration
+
+Edit `client/vite.config.ts` to:
+
+- Change the server address (if backend is on a different host)
+- Modify the port
+
+## 🛡️ Security
+
+- **Network Isolation**: Containers run with `--network none`
+- **Resource Limits**: Memory and CPU usage are capped
+- **Ephemeral Execution**: Containers are removed after execution
+- **Timeout Protection**: Execution is limited to 5 seconds by default
+- **Session Isolation**: Each user's data exists only in browser sessionStorage
+
+## 📊 Performance
+
+CodeRunner uses a **Warm Container Pool** strategy:
+
+- Pre-warmed containers are ready (~100ms latency)
+- Eliminates Docker cold-start penalty (~1.5s)
+- Containers are recycled after each execution
+- Default: 3 containers per language
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](docs/contributing.md) for guidelines.
+
+## 👥 Contributors
+
+- Hemanthkumar K - [GitHub](https://github.com/hemanthkumar2k04)
+- Gowsi S M - [GitHub](https://github.com/gowsism)
+
+## 📄 License
+
+This project is provided for educational purposes.
+
+## ⚠️ Notes
+
+- Each workspace is temporary (session-based) and cleared when the browser is closed
+- Files are stored in `sessionStorage`, not persisted to the server
+- Maximum file size: 500KB per file, 4MB total workspace
+- Supported languages: Python, JavaScript, Java, C++

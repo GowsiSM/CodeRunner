@@ -39,7 +39,7 @@ function getRunCommand(language: string, entryFile: string): string {
   switch(language) {
     case 'python': return `python -u ${entryFile}`; // -u for unbuffered output
     case 'javascript': return `node ${entryFile}`;
-    case 'cpp': return 'g++ -o app *.cpp && ./app';
+    case 'cpp': return 'g++ -o app *.c *.cpp *.cc *.cxx *.c++ 2>/dev/null; ./app';
     case 'java': {
       const className = entryFile.replace('.java', '');
       return `javac *.java && java ${className}`;

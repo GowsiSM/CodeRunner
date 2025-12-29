@@ -134,7 +134,13 @@ export const useEditorStore = create<EditorState>()(
             };
           }
 
-          return { files: newFiles, rootIds: newRootIds };
+          // Auto-open the new file in editor
+          return { 
+            files: newFiles, 
+            rootIds: newRootIds,
+            activeFileId: id,
+            openTabs: state.openTabs.includes(id) ? state.openTabs : [...state.openTabs, id],
+          };
         });
 
         return { success: true, id };

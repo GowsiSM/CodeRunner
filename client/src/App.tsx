@@ -5,16 +5,15 @@ import { Navbar } from './components/Navbar';
 import { Workspace } from './components/Workspace';
 import { CodeEditor } from './components/CodeEditor';
 import { Console } from './components/Console';
-import { DependencyResolver } from './components/dependency-resolver';
 import { useSocket } from './hooks/useSocket';
 import { useEditorStore } from './stores/useEditorStore';
+import { getLanguageFromExtension, flattenTree, isLanguageSupported } from './lib/file-utils';
 
 function AppContent() {
-  const [showDependencyResolver, setShowDependencyResolver] = useState(false);
-  const { disconnect } = useSocket();
+  const { runCode, disconnect } = useSocket();
   const files = useEditorStore((state) => state.files);
+  const rootIds = useEditorStore((state) => state.rootIds);
   const activeFileId = useEditorStore((state) => state.activeFileId);
-  const getAllFiles = useEditorStore((state) => state.getAllFiles);
 
   // Panel sizing state
   const [sidebarWidth, setSidebarWidth] = useState(250);
@@ -25,18 +24,28 @@ function AppContent() {
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Handle run button click - show dependency resolver
+  // Handle run button click - automatically run with all compatible files
   const handleRunClick = useCallback(() => {
-    const allFiles = getAllFiles();
-    if (allFiles.length <= 1) {
-      const activeFile = activeFileId ? files[activeFileId] : null;
-      if (activeFile) {
-        setShowDependencyResolver(true);
-      }
-    } else {
-      setShowDependencyResolver(true);
+    const activeFile = activeFileId ? files[activeFileId] : null;
+    if (!activeFile) return;
+
+    const activeLanguage = getLanguageFromExtension(activeFile.name);
+    if (!activeLanguage || !isLanguageSupported(activeLanguage)) return;
+
+    // Get all files and filter to compatible ones
+    const allFiles = flattenTree(files, rootIds);
+    const compatibleFiles = allFiles
+      .filter(f => getLanguageFromExtension(f.name) === activeLanguage)
+      .map(f => ({
+        name: f.name,
+        content: f.content,
+        toBeExec: f.id === activeFileId,
+      }));
+
+    if (compatibleFiles.length > 0) {
+      runCode(compatibleFiles, activeLanguage);
     }
-  }, [activeFileId, files, getAllFiles]);
+  }, [activeFileId, files, rootIds, runCode]);
 
   // Cleanup socket on unmount
   useEffect(() => {
@@ -120,12 +129,6 @@ function AppContent() {
           </div>
         </div>
       </main>
-
-      {/* Dependency Resolver Dialog */}
-      <DependencyResolver
-        open={showDependencyResolver}
-        onOpenChange={setShowDependencyResolver}
-      />
     </div>
   );
 }

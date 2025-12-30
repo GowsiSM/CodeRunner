@@ -7,6 +7,7 @@ import {
   getFileSize,
   flattenTree,
   isLanguageSupported,
+  isDataFile,
 } from '@/lib/file-utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,8 +48,13 @@ export function DependencyResolver({ open, onOpenChange }: DependencyResolverPro
   // Get all files (non-folders) from the tree
   const allFiles = flattenTree(files, rootIds);
   
-  // Filter to files matching the active file's language
+  // Filter to files matching the active file's language OR data files
   const compatibleFiles = allFiles.filter((f) => {
+    // Always include data files
+    if (isDataFile(f.name)) {
+      return true;
+    }
+    // Include source files of the same language
     const lang = getLanguageFromExtension(f.name);
     return lang === activeLanguage;
   });
@@ -58,16 +64,22 @@ export function DependencyResolver({ open, onOpenChange }: DependencyResolverPro
     if (open && activeFileId) {
       // Start with the active file selected
       const initial = new Set<string>([activeFileId]);
-      // Add previously selected files that are still compatible
+      // Always add all data files
+      allFiles.forEach((f) => {
+        if (isDataFile(f.name)) {
+          initial.add(f.id);
+        }
+      });
+      // Add previously selected source files that are still compatible
       selectedFilesForRun.forEach((id) => {
-        const isCompatible = allFiles.some((f) => f.id === id && getLanguageFromExtension(f.name) === activeLanguage);
-        if (isCompatible) {
+        const file = allFiles.find((f) => f.id === id);
+        if (file && !isDataFile(file.name) && getLanguageFromExtension(file.name) === activeLanguage) {
           initial.add(id);
         }
       });
       setLocalSelected(initial);
     }
-  }, [open, activeFileId]);
+  }, [open, activeFileId, allFiles, selectedFilesForRun]);
 
   const toggleFile = useCallback((fileId: string) => {
     // Don't allow deselecting the entry point (active file)

@@ -7,7 +7,7 @@ import { CodeEditor } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { useSocket } from './hooks/useSocket';
 import { useEditorStore } from './stores/useEditorStore';
-import { getLanguageFromExtension, flattenTree, isLanguageSupported } from './lib/file-utils';
+import { getLanguageFromExtension, flattenTree, isLanguageSupported, isDataFile } from './lib/file-utils';
 
 function AppContent() {
   const { runCode, disconnect } = useSocket();
@@ -24,7 +24,7 @@ function AppContent() {
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Handle run button click - automatically run with all compatible files
+  // Handle run button click - automatically run with all compatible files and data files
   const handleRunClick = useCallback(() => {
     const activeFile = activeFileId ? files[activeFileId] : null;
     if (!activeFile) return;
@@ -32,10 +32,20 @@ function AppContent() {
     const activeLanguage = getLanguageFromExtension(activeFile.name);
     if (!activeLanguage || !isLanguageSupported(activeLanguage)) return;
 
-    // Get all files and filter to compatible ones
+    // Get all files and filter to compatible ones (same language OR data files)
     const allFiles = flattenTree(files, rootIds);
     const compatibleFiles = allFiles
-      .filter(f => getLanguageFromExtension(f.name) === activeLanguage)
+      .filter(f => {
+        // Include source files of the same language
+        if (getLanguageFromExtension(f.name) === activeLanguage) {
+          return true;
+        }
+        // Always include data files
+        if (isDataFile(f.name)) {
+          return true;
+        }
+        return false;
+      })
       .map(f => ({
         name: f.name,
         content: f.content,

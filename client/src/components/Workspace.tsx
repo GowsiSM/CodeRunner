@@ -64,9 +64,11 @@ interface FileTreeNodeProps {
   nodeId: string;
   depth: number;
   onContextAction: (action: string, nodeId: string, isFolder: boolean) => void;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string) => void;
 }
 
-function FileTreeNode({ nodeId, depth, onContextAction }: FileTreeNodeProps) {
+function FileTreeNode({ nodeId, depth, onContextAction, selectedNodeId, onSelectNode }: FileTreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const files = useEditorStore((state) => state.files);
   const activeFileId = useEditorStore((state) => state.activeFileId);
@@ -77,6 +79,9 @@ function FileTreeNode({ nodeId, depth, onContextAction }: FileTreeNodeProps) {
   if (!node) return null;
 
   const handleClick = () => {
+    // Always select the clicked node
+    onSelectNode(nodeId);
+    
     if (node.isFolder) {
       setIsExpanded(!isExpanded);
     } else {
@@ -96,7 +101,9 @@ function FileTreeNode({ nodeId, depth, onContextAction }: FileTreeNodeProps) {
             className={cn(
               'group flex items-center gap-1 text-sm cursor-pointer py-1 px-2 rounded-md transition-colors',
               'hover:bg-sidebar-accent',
-              isActive && !node.isFolder && 'bg-sidebar-accent text-sidebar-accent-foreground'
+              selectedNodeId === node.id
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : !selectedNodeId && isActive && !node.isFolder && 'bg-sidebar-accent text-sidebar-accent-foreground'
             )}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
             onClick={handleClick}
@@ -197,6 +204,8 @@ function FileTreeNode({ nodeId, depth, onContextAction }: FileTreeNodeProps) {
               nodeId={childId}
               depth={depth + 1}
               onContextAction={onContextAction}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={onSelectNode}
             />
           ))}
         </div>
@@ -213,6 +222,7 @@ export function Workspace() {
   const deleteNode = useEditorStore((state) => state.deleteNode);
   const renameNode = useEditorStore((state) => state.renameNode);
 
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState>({
     type: null,
     parentId: null,
@@ -224,6 +234,14 @@ export function Workspace() {
     name: string;
     isFolder: boolean;
   } | null>(null);
+
+  const getParentIdForNewItem = useCallback(() => {
+    if (!selectedNodeId) return null; // Create at root
+    const selectedNode = files[selectedNodeId];
+    if (!selectedNode) return null;
+    // If selected is a folder, create inside it; if file, create in its parent
+    return selectedNode.isFolder ? selectedNodeId : selectedNode.parentId || null;
+  }, [selectedNodeId, files]);
 
   const sortedRootIds = sortFileNodes(rootIds, files);
 
@@ -356,7 +374,7 @@ export function Workspace() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => openDialog('newFile', null)}
+                  onClick={() => openDialog('newFile', getParentIdForNewItem())}
                 >
                   <FilePlus className="h-4 w-4" />
                 </Button>
@@ -369,7 +387,7 @@ export function Workspace() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => openDialog('newFolder', null)}
+                  onClick={() => openDialog('newFolder', getParentIdForNewItem())}
                 >
                   <FolderPlus className="h-4 w-4" />
                 </Button>
@@ -397,6 +415,8 @@ export function Workspace() {
                   nodeId={nodeId}
                   depth={0}
                   onContextAction={handleContextAction}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={setSelectedNodeId}
                 />
               ))
             )}

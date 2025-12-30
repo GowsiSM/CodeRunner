@@ -206,6 +206,15 @@ export function isLanguageSupported(language: string | null): language is Suppor
 }
 
 /**
+ * Check if a file is a data file (not a source code file)
+ * Data files should always be included when running code
+ */
+export function isDataFile(filename: string): boolean {
+  const ext = getExtension(filename).toLowerCase();
+  return ['.csv', '.json', '.yaml', '.yml', '.txt', '.xml'].includes(ext);
+}
+
+/**
  * Get the entry point filename for a language
  */
 export function getDefaultEntryPoint(language: SupportedLanguage): string {

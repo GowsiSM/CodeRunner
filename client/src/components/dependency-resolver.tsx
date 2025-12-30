@@ -116,6 +116,7 @@ export function DependencyResolver({ open, onOpenChange }: DependencyResolverPro
       .filter((f): f is FileNode => f !== undefined && !f.isFolder)
       .map((f) => ({
         name: f.name,
+        path: f.path,
         content: f.content,
         toBeExec: f.id === activeFileId,
       }));

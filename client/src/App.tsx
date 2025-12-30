@@ -48,6 +48,7 @@ function AppContent() {
       })
       .map(f => ({
         name: f.name,
+        path: f.path,
         content: f.content,
         toBeExec: f.id === activeFileId,
       }));

@@ -25,6 +25,7 @@ app.use(express.json());
 
 export interface File {
   name: string;
+  path: string;
   content: string;
   toBeExec?: boolean;
 }
@@ -41,8 +42,8 @@ function getRunCommand(language: string, entryFile: string): string {
     case 'javascript': return `node ${entryFile}`;
     case 'cpp': return 'find . -maxdepth 1 \\( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c++" \\) -print0 | xargs -0 g++ -o app && ./app';
     case 'java': {
-      const className = entryFile.replace('.java', '');
-      return `javac *.java && java ${className}`;
+      const className = entryFile.split('/').pop()?.replace('.java', '') || entryFile.replace('.java', '');
+      return `javac -d . $(find . -name "*.java") && java ${className}`;
     }
     default: throw new Error(`Unsupported language: ${language}`);
   }
@@ -71,7 +72,7 @@ io.on('connection', (socket) => {
 
     // Find entry file
     const entryFile = files.find(f => f.toBeExec);
-    console.log('[Server] Entry file:', entryFile?.name);
+    console.log('[Server] Entry file:', entryFile?.path || entryFile?.name);
     if (!entryFile && language !== 'cpp') {
        socket.emit('output', { type: 'stderr', data: 'Error: No entry file marked for execution.\n' });
        socket.emit('exit', 1);
@@ -80,7 +81,7 @@ io.on('connection', (socket) => {
 
     let command = '';
     try {
-        command = getRunCommand(language, entryFile ? entryFile.name : '');
+        command = getRunCommand(language, entryFile ? entryFile.path : '');
         console.log('[Server] Command:', command);
     } catch (e: any) {
         socket.emit('output', { type: 'stderr', data: e.message + '\n' });
@@ -107,9 +108,10 @@ io.on('connection', (socket) => {
     try {
       fs.mkdirSync(tempDir, { recursive: true });
       for (const file of files) {
-        const safeName = path.basename(file.name); 
-        fs.writeFileSync(path.join(tempDir, safeName), file.content);
-        console.log('[Server] Wrote file:', safeName);
+        const filePath = path.join(tempDir, file.path);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, file.content);
+        console.log('[Server] Wrote file:', file.path);
       }
     } catch (err: any) {
       cleanup();

@@ -3,9 +3,22 @@
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Starting CodeRunner Setup...${NC}"
+
+# Get the original user if running with sudo
+if [ "$EUID" -eq 0 ]; then
+  ORIGINAL_USER=$SUDO_USER
+  if [ -z "$ORIGINAL_USER" ]; then
+    echo -e "${YELLOW}⚠️  Could not detect original user${NC}"
+    exit 1
+  fi
+  echo -e "${BLUE}📌 Running with sudo as user: $ORIGINAL_USER${NC}"
+else
+  ORIGINAL_USER=$(whoami)
+fi
 
 # Check and load nvm if available
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
@@ -14,16 +27,28 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
   nvm use
 fi
 
+# Clean up any node_modules with permission issues
+echo -e "\n${BLUE}🧹 Cleaning up old node_modules...${NC}"
+rm -rf server/node_modules client/node_modules
+
 # 1. Install Server Dependencies
 echo -e "\n${BLUE}📦 Installing Server Dependencies...${NC}"
-cd server
-npm ci
+cd server || exit 1
+if [ "$EUID" -eq 0 ]; then
+  sudo -u "$ORIGINAL_USER" npm ci
+else
+  npm ci
+fi
 cd ..
 
 # 2. Install Client Dependencies
 echo -e "\n${BLUE}📦 Installing Client Dependencies...${NC}"
-cd client
-npm ci
+cd client || exit 1
+if [ "$EUID" -eq 0 ]; then
+  sudo -u "$ORIGINAL_USER" npm ci
+else
+  npm ci
+fi
 cd ..
 
 # 3. Build Docker Runtimes
@@ -31,34 +56,34 @@ echo -e "\n${BLUE}🐳 Building Docker Runtimes...${NC}"
 
 # Python
 echo -e "${GREEN}Building Python Runtime...${NC}"
-cd runtimes/python
+cd runtimes/python || exit 1
 docker build -t python-runtime .
 cd ../..
 
 # C++
 echo -e "${GREEN}Building C++ Runtime...${NC}"
-cd runtimes/cpp
+cd runtimes/cpp || exit 1
 docker build -t cpp-runtime .
 cd ../..
 
 # Java
 echo -e "${GREEN}Building Java Runtime...${NC}"
-cd runtimes/java
+cd runtimes/java || exit 1
 docker build -t java-runtime .
 cd ../..
 
 # Node.js
 echo -e "${GREEN}Building Node.js Runtime...${NC}"
-cd runtimes/javascript
+cd runtimes/javascript || exit 1
 docker build -t node-runtime .
 cd ../..
 
 # MySQL
 echo -e "${GREEN}Building MySQL Runtime...${NC}"
-cd runtimes/mysql
+cd runtimes/mysql || exit 1
 docker build -t mysql-runtime .
 cd ../..
 
 echo -e "\n${GREEN}✅ Setup Complete!${NC}"
-echo -e "To start the server:  ${BLUE}cd server && sudo npm run dev${NC}"
-echo -e "To start the client:  ${BLUE}cd client && sudo npm run dev${NC}"
+echo -e "To start the server:  ${BLUE}cd server && npm run dev${NC}"
+echo -e "To start the client:  ${BLUE}cd client && npm run dev${NC}"

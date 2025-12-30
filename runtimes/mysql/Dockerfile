@@ -1,4 +1,4 @@
-FROM mysql:8.0-slim
+FROM mysql:8.0
 
 # Create a non-root user for running queries
 RUN useradd -m runner

@@ -92,17 +92,19 @@ class ContainerPool {
   }
 
   /**
-   * Recycle the container
+   * Recycle the container and remove associated volumes
    */
   async recycleContainer(language: string, containerId: string) {
-    exec(`docker rm -f ${containerId}`, (err) => {
+    // Remove container with -v flag to also remove associated volumes
+    exec(`docker rm -fv ${containerId}`, (err) => {
       if (err) console.error(`Failed to remove container ${containerId}:`, err);
+      else console.log(`Removed container and volumes: ${containerId}`);
     });
     this.createContainer(language);
   }
 
   /**
-   * Cleanup all containers in the pool (and any orphans)
+   * Cleanup all containers in the pool (and any orphans) and remove their volumes
    */
   async cleanup() {
     console.log('Cleaning up container pool...');
@@ -112,11 +114,11 @@ class ContainerPool {
       this.pool[lang] = [];
     }
 
-    // 2. Force remove ALL containers labeled as coderunner-worker
+    // 2. Force remove ALL containers labeled as coderunner-worker and their volumes
     try {
       const { stdout } = await execAsync('docker ps -aq --filter label=type=coderunner-worker');
       if (stdout.trim()) {
-        await execAsync(`docker rm -f ${stdout.trim().replace(/\n/g, ' ')}`);
+        await execAsync(`docker rm -fv ${stdout.trim().replace(/\n/g, ' ')}`);
       }
     } catch (e) {
       // Ignore error

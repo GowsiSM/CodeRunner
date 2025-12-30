@@ -1,21 +1,32 @@
 import { Code2, Moon, Sun, AlertTriangle } from "lucide-react"
+import { useState } from "react"
 import { useTheme } from "./theme-provider"
 import fabricLogo from "../assets/fabric.png"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
+  const [showWarning, setShowWarning] = useState(true)
 
   return (
     <div className="flex flex-col">
       {/* Warning Banner */}
-      <Alert variant="default" className="rounded-none border-x-0 border-t-0 bg-amber-500/10 border-amber-500/30">
-        <AlertTriangle className="h-4 w-4 text-amber-500" />
-        <AlertDescription className="text-amber-600 dark:text-amber-400 text-sm">
-          <strong>Warning:</strong> Your work is temporary and will be lost when you close this tab. 
-          This is a session-based editor — data is not saved to a server.
-        </AlertDescription>
-      </Alert>
+      {showWarning && (
+        <Alert variant="default" className="rounded-none border-x-0 border-t-0 bg-amber-500/10 border-amber-500/30">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertDescription className="text-amber-600 dark:text-amber-400 text-sm">
+            <strong>Warning:</strong> Your work is temporary and will be lost when you close this tab. 
+            This is a session-based editor — data is not saved to a server.
+          </AlertDescription>
+          <button
+            aria-label="Dismiss warning"
+            onClick={() => setShowWarning(false)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded text-amber-500 hover:bg-amber-500/20 text-lg leading-none"
+          >
+            ×
+          </button>
+        </Alert>
+      )}
 
       {/* Navbar */}
       <nav className="border-b bg-background">

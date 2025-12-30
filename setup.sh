@@ -8,11 +8,16 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Starting CodeRunner Setup...${NC}"
 
-# Ensure script is not run with sudo
-if [ "$EUID" -eq 0 ]; then 
-  echo -e "${YELLOW}⚠️  Please do not run this script with sudo!${NC}"
-  echo -e "${YELLOW}Run without sudo to avoid permission issues.${NC}"
-  exit 1
+# Get the original user if running with sudo
+if [ "$EUID" -eq 0 ]; then
+  ORIGINAL_USER=$SUDO_USER
+  if [ -z "$ORIGINAL_USER" ]; then
+    echo -e "${YELLOW}⚠️  Could not detect original user${NC}"
+    exit 1
+  fi
+  echo -e "${BLUE}📌 Running with sudo as user: $ORIGINAL_USER${NC}"
+else
+  ORIGINAL_USER=$(whoami)
 fi
 
 # Check and load nvm if available
@@ -25,18 +30,25 @@ fi
 # Clean up any node_modules with permission issues
 echo -e "\n${BLUE}🧹 Cleaning up old node_modules...${NC}"
 rm -rf server/node_modules client/node_modules
-rm -rf server/package-lock.json client/package-lock.json
 
 # 1. Install Server Dependencies
 echo -e "\n${BLUE}📦 Installing Server Dependencies...${NC}"
 cd server || exit 1
-npm ci
+if [ "$EUID" -eq 0 ]; then
+  sudo -u "$ORIGINAL_USER" npm ci
+else
+  npm ci
+fi
 cd ..
 
 # 2. Install Client Dependencies
 echo -e "\n${BLUE}📦 Installing Client Dependencies...${NC}"
 cd client || exit 1
-npm ci
+if [ "$EUID" -eq 0 ]; then
+  sudo -u "$ORIGINAL_USER" npm ci
+else
+  npm ci
+fi
 cd ..
 
 # 3. Build Docker Runtimes

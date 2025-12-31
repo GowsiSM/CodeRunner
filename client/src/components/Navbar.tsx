@@ -1,12 +1,33 @@
 import { Code2, Moon, Sun, AlertTriangle } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTheme } from "./theme-provider"
 import fabricLogo from "../assets/fabric.png"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import KeyboardShortcutsModal from "./KeyboardShortcutsModal";
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
   const [showWarning, setShowWarning] = useState(true)
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "?") {
+        const target = e.target as HTMLElement | null;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable)
+        )
+          return;
+        setShowShortcuts(true);
+      }
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="flex flex-col">
@@ -32,16 +53,16 @@ export function Navbar() {
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center px-6 gap-6">
           {/* Logo Section */}
-          <a 
-            href="https://fabric-eec.vercel.app" 
-            target="_blank" 
-            rel="noreferrer" 
+          <a
+            href="https://fabric-eec.vercel.app"
+            target="_blank"
+            rel="noreferrer"
             className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
           >
-            <img 
-              src={fabricLogo} 
-              alt="Fabric Logo" 
-              className="h-9 w-auto group-hover:scale-105 transition-transform" 
+            <img
+              src={fabricLogo}
+              alt="Fabric Logo"
+              className="h-9 w-auto group-hover:scale-105 transition-transform"
             />
             <div className="h-8 w-px bg-border" />
           </a>
@@ -69,8 +90,20 @@ export function Navbar() {
             <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </button>
+          {/* Help / Shortcuts Button */}
+          <button
+            aria-label="Keyboard shortcuts"
+            onClick={() => setShowShortcuts(true)}
+            className="inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground h-10 w-10 hover:scale-105 active:scale-95"
+          >
+            ?
+          </button>
         </div>
       </nav>
+      <KeyboardShortcutsModal
+        open={showShortcuts}
+        onOpenChange={setShowShortcuts}
+      />
     </div>
   )
 }

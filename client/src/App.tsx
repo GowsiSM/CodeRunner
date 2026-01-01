@@ -35,7 +35,7 @@ function AppContent() {
 
     const activeLanguage = getLanguageFromExtension(activeFile.name);
     if (!activeLanguage || !isLanguageSupported(activeLanguage)) return;
-
+    
     // Get all files and filter to compatible ones (same language OR data files)
     const allFiles = flattenTree(files, rootIds);
     const compatibleFiles = allFiles

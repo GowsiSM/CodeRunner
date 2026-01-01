@@ -73,6 +73,15 @@ export function CodeEditor({ onRunClick }: CodeEditorProps) {
     }
   }, [activeFileId, markAsSaved]);
 
+  const handleRunClick = useCallback(() => {
+    // Save the file first if it's modified
+    if (activeFile?.isModified) {
+      handleSave();
+    }
+    // Then run the code
+    onRunClick();
+  }, [activeFile?.isModified, handleSave, onRunClick]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -81,10 +90,10 @@ export function CodeEditor({ onRunClick }: CodeEditorProps) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         if (activeFile && execLanguage && !isRunning) {
-          onRunClick();
+          handleRunClick();
         }
       }
-    }, [handleSave, activeFile, execLanguage, isRunning, onRunClick]);
+    }, [handleSave, activeFile, execLanguage, isRunning, handleRunClick]);
 
   // Empty state when no file is open
   if (openTabs.length === 0) {
@@ -187,7 +196,7 @@ export function CodeEditor({ onRunClick }: CodeEditorProps) {
                     "gap-2 h-8 px-4",
                     isRunning && "animate-pulse"
                   )}
-                  onClick={onRunClick}
+                  onClick={handleRunClick}
                   disabled={!activeFile || !execLanguage || isRunning}
                 >
                   {isRunning ? (

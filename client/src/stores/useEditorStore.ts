@@ -4,6 +4,23 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 // Constants for storage limits
 export const MAX_FILE_SIZE = 500 * 1024; // 500KB per file
 export const MAX_TOTAL_SIZE = 4 * 1024 * 1024; // 4MB total
+/**
+ * Maximum number of console output entries to keep in memory.
+ * When this limit is exceeded, oldest entries are automatically discarded.
+ * 
+ * This prevents unbounded memory growth during long-running sessions or
+ * repeated code executions. Without this limit, the output array can grow
+ * indefinitely and cause performance degradation and memory leaks.
+ * 
+ * 10,000 entries represents approximately 2-5MB of memory usage depending
+ * on average output line length. Adjust based on target system constraints.
+ * 
+ * See also:
+ * - appendOutput() in EditorState for buffer management implementation
+ * - Console.tsx for rendering with virtualization (only visible entries rendered)
+ * - server/src/index.ts for output batching on the server side
+ */
+export const MAX_OUTPUT_ENTRIES = 10000; // Keep last 10,000 output entries to prevent memory bloat
 
 export interface FileNode {
   id: string;
@@ -408,9 +425,15 @@ export const useEditorStore = create<EditorState>()(
       },
 
       appendOutput: (entry: Omit<OutputEntry, 'timestamp'>) => {
-        set(state => ({
-          output: [...state.output, { ...entry, timestamp: Date.now() }],
-        }));
+        set(state => {
+          let newOutput = [...state.output, { ...entry, timestamp: Date.now() }];
+          // Maintain max output entries to prevent memory bloat during long-running sessions
+          // When buffer exceeds MAX_OUTPUT_ENTRIES, discard oldest entries (keep only most recent)
+          if (newOutput.length > MAX_OUTPUT_ENTRIES) {
+            newOutput = newOutput.slice(-MAX_OUTPUT_ENTRIES);
+          }
+          return { output: newOutput };
+        });
       },
 
       setRunning: (running: boolean) => {

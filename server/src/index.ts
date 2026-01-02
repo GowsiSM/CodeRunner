@@ -44,19 +44,6 @@ function authenticateAdmin(req: express.Request, res: express.Response, next: ex
   next();
 }
 
-export interface File {
-  name: string;
-  path: string;
-  content: string;
-  toBeExec?: boolean;
-}
-
-export interface RunResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
 // --- Admin API Endpoints ---
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
@@ -150,15 +137,48 @@ io.on('connection', (socket) => {
   let tempDir: string | null = null;
   let containerId: string | null = null;
   let currentLanguage: string | null = null;
+  
+  // Output buffering - batch chunks to reduce socket traffic and memory overhead
+  // Instead of emitting every stdout/stderr chunk immediately, we buffer them and
+  // emit in batches every 100ms. This reduces:
+  // - Socket.io message overhead (fewer emit calls)
+  // - Network traffic (combined chunks are more efficient)
+  // - Client-side memory pressure (reduces processing overhead)
+  // - Server console logging (only critical logs kept after refactoring)
+  let outputBuffer: { type: 'stdout' | 'stderr'; data: string }[] = [];
+  let flushBufferTimer: NodeJS.Timeout | null = null;
+  
+  const flushOutputBuffer = () => {
+    if (outputBuffer.length > 0) {
+      // Combine consecutive same-type chunks to further reduce overhead
+      // e.g., [stdout:"a", stdout:"b", stderr:"c"] → [stdout:"ab", stderr:"c"]
+      const combined: { type: 'stdout' | 'stderr'; data: string }[] = [];
+      for (const item of outputBuffer) {
+        if (combined.length > 0 && combined[combined.length - 1].type === item.type) {
+          combined[combined.length - 1].data += item.data;
+        } else {
+          combined.push(item);
+        }
+      }
+      // Emit combined chunks
+      combined.forEach(item => socket.emit('output', item));
+      outputBuffer = [];
+    }
+    flushBufferTimer = null;
+  };
+  
+  const scheduleFlush = () => {
+    if (!flushBufferTimer) {
+      flushBufferTimer = setTimeout(flushOutputBuffer, 100); // Flush every 100ms
+    }
+  };
 
   socket.on('run', async (data: { language: string, files: File[] }) => {
-    console.log('[Server] Received run event:', { language: data.language, fileCount: data.files.length });
     const { language, files } = data;
     currentLanguage = language;
 
     const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
     if (!runtimeConfig) {
-      console.log('[Server] Unsupported language:', language);
       socket.emit('output', { type: 'stderr', data: `Error: Unsupported language '${language}'\n` });
       socket.emit('exit', 1);
       return;
@@ -166,7 +186,6 @@ io.on('connection', (socket) => {
 
     // Find entry file
     const entryFile = files.find(f => f.toBeExec);
-    console.log('[Server] Entry file:', entryFile?.path || entryFile?.name);
     if (!entryFile && language !== 'cpp' && language !== 'sql') {
        socket.emit('output', { type: 'stderr', data: 'Error: No entry file marked for execution.\n' });
        socket.emit('exit', 1);
@@ -187,7 +206,6 @@ io.on('connection', (socket) => {
     let command = '';
     try {
         command = getRunCommand(language, execFile ? execFile.path : '');
-        console.log('[Server] Command:', command);
     } catch (e: any) {
         socket.emit('output', { type: 'stderr', data: e.message + '\n' });
         socket.emit('exit', 1);
@@ -197,9 +215,7 @@ io.on('connection', (socket) => {
     // 1. Get container
     try {
       containerId = await containerPool.getContainer(language);
-      console.log('[Server] Got container:', containerId);
     } catch (e) {
-      console.log('[Server] Failed to get container:', e);
       socket.emit('output', { type: 'stderr', data: 'System Error: Failed to acquire container\n' });
       socket.emit('exit', 1);
       return;
@@ -207,7 +223,6 @@ io.on('connection', (socket) => {
 
     const runId = Date.now().toString() + Math.random().toString(36).substring(7);
     tempDir = path.resolve(__dirname, '..', 'temp', `runner-${runId}`);
-    console.log('[Server] Temp dir:', tempDir);
 
     // 2. Write files
     try {
@@ -216,7 +231,6 @@ io.on('connection', (socket) => {
         const filePath = path.join(tempDir, file.path);
         fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, file.content);
-        console.log('[Server] Wrote file:', file.path);
       }
     } catch (err: any) {
       cleanup();
@@ -227,17 +241,14 @@ io.on('connection', (socket) => {
 
     // 3. Copy files
     const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
-    console.log('[Server] Copy command:', cpCommand);
     exec(cpCommand, (cpError) => {
       if (cpError) {
-        console.log('[Server] Copy error:', cpError);
         cleanup();
         socket.emit('output', { type: 'stderr', data: `System Error (Copy): ${cpError.message}\n` });
         socket.emit('exit', 1);
         return;
       }
 
-      console.log('[Server] Files copied, spawning process...');
       // 4. Spawn process
       // Use -i for interactive (keeps stdin open)
       const dockerArgs = [
@@ -247,22 +258,25 @@ io.on('connection', (socket) => {
         containerId!,
         '/bin/sh', '-c', command
       ];
-      console.log('[Server] Docker args:', dockerArgs);
 
       currentProcess = spawn('docker', dockerArgs);
 
       currentProcess.stdout.on('data', (chunk: Buffer) => {
-        console.log('[Server] stdout:', chunk.toString());
-        socket.emit('output', { type: 'stdout', data: chunk.toString() });
+        outputBuffer.push({ type: 'stdout', data: chunk.toString() });
+        scheduleFlush();
       });
 
       currentProcess.stderr.on('data', (chunk: Buffer) => {
-        console.log('[Server] stderr:', chunk.toString());
-        socket.emit('output', { type: 'stderr', data: chunk.toString() });
+        outputBuffer.push({ type: 'stderr', data: chunk.toString() });
+        scheduleFlush();
       });
 
       currentProcess.on('close', (code: number) => {
-        console.log('[Server] Process exited with code:', code);
+        // Flush any remaining buffered output before exit
+        if (flushBufferTimer) {
+          clearTimeout(flushBufferTimer);
+          flushOutputBuffer();
+        }
         socket.emit('exit', code);
         cleanup();
       });
@@ -281,6 +295,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    if (flushBufferTimer) {
+      clearTimeout(flushBufferTimer);
+    }
     if (currentProcess) {
       currentProcess.kill();
     }

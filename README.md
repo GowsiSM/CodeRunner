@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="client/src/assets/CodeRunner.png" alt="CodeRunner Logo" width="80" style="vertical-align: middle;"/>
-  <span style="font-size: 48px; font-weight: bold; vertical-align: middle; margin-left: 20px;">CodeRunner</span>
+  <img width="512" height="111" alt="image" src="https://github.com/user-attachments/assets/db7696aa-0ef2-400d-84c5-a440536b3e12" />
+
 </p>
 
 **Developed by F.A.B.R.I.C Club of Easwari Engineering College**

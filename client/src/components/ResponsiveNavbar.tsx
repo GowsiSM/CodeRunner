@@ -1,4 +1,4 @@
-import { Moon, Sun, AlertTriangle, Menu } from "lucide-react"
+import { Moon, Sun, AlertTriangle, Menu, X } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useTheme } from "./theme-provider"
 import fabricLogo from "../assets/fabric.png"
@@ -6,28 +6,16 @@ import codeRunnerLogo from "../assets/CodeRunner.png"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import KeyboardShortcutsModal from "./KeyboardShortcutsModal"
-import { cn } from "@/lib/utils"
 
 interface ResponsiveNavbarProps {
-  onMenuClick?: () => void;
-  showMenuButton?: boolean;
+  onMenuClick: () => void;
+  isMenuOpen: boolean;
 }
 
-export function ResponsiveNavbar({ onMenuClick, showMenuButton = false }: ResponsiveNavbarProps) {
+export function ResponsiveNavbar({ onMenuClick, isMenuOpen }: ResponsiveNavbarProps) {
   const { theme, setTheme } = useTheme()
   const [showWarning, setShowWarning] = useState(true)
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -71,27 +59,23 @@ export function ResponsiveNavbar({ onMenuClick, showMenuButton = false }: Respon
       {/* Navbar - Responsive */}
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 sm:h-16 items-center px-3 sm:px-6 gap-2 sm:gap-6">
-          {/* Mobile Menu Button */}
-          {showMenuButton && isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onMenuClick}
-              className="h-9 w-9 md:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
+          {/* Mobile Menu Button - Always visible on mobile/tablet */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMenuClick}
+            className="h-9 w-9 lg:hidden shrink-0"
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          >
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
 
-          {/* Logo Section - Hidden on small mobile */}
+          {/* Logo Section - Hidden on mobile, shown on tablet+ */}
           <a
             href="https://fabric-eec.vercel.app"
             target="_blank"
             rel="noreferrer"
-            className={cn(
-              "hidden sm:flex items-center gap-3 px-2 sm:px-4 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group",
-              !showMenuButton && "flex"
-            )}
+            className="hidden md:flex items-center gap-3 px-2 sm:px-4 py-2 rounded-lg hover:bg-accent/50 transition-all duration-200 group"
           >
             <img
               src={fabricLogo}

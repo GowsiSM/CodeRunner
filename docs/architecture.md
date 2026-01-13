@@ -23,6 +23,7 @@ CodeRunner executes user code in isolated Docker containers with real-time outpu
 ## Session-Based Container Pool
 
 Each user session gets:
+
 - **Isolated network**: `coderunner-session-{socketId}`
 - **On-demand containers**: Created when code runs, reused within TTL
 - **Automatic cleanup**: Containers expire after 60s inactivity
@@ -35,21 +36,21 @@ Session Connect → Network Created → Code Run → Container Created → Reuse
 
 ## Container Lifecycle
 
-| Event | Action |
-|-------|--------|
-| First code run | Create container, attach to session network |
-| Subsequent runs | Reuse existing container, refresh TTL |
-| 60s inactivity | Container auto-deleted |
-| Disconnect | Immediate container + network cleanup |
+| Event           | Action                                      |
+| --------------- | ------------------------------------------- |
+| First code run  | Create container, attach to session network |
+| Subsequent runs | Reuse existing container, refresh TTL       |
+| 60s inactivity  | Container auto-deleted                      |
+| Disconnect      | Immediate container + network cleanup       |
 
 ## Security Model
 
-| Layer | Protection |
-|-------|-----------|
-| **Network** | Each session has isolated Docker bridge network |
-| **Resources** | CPU: 0.5 cores, Memory: 128MB per container |
-| **Execution** | 30-second timeout per execution |
-| **Cleanup** | Automatic removal of expired containers/networks |
+| Layer         | Protection                                       |
+| ------------- | ------------------------------------------------ |
+| **Network**   | Each session has isolated Docker bridge network  |
+| **Resources** | CPU: 0.5 cores, Memory: 128MB per container      |
+| **Execution** | 30-second timeout per execution                  |
+| **Cleanup**   | Automatic removal of expired containers/networks |
 
 ## Project Structure
 
@@ -82,10 +83,10 @@ CodeRunner/
 
 ## Performance
 
-| Metric | Value |
-|--------|-------|
-| First execution | ~1-2s (container creation) |
-| Subsequent runs | ~200-400ms (container reuse) |
-| Container TTL | 60 seconds |
-| Cleanup interval | 30 seconds |
+| Metric                  | Value                                         |
+| ----------------------- | --------------------------------------------- |
+| First execution         | ~1-2s (container creation)                    |
+| Subsequent runs         | ~200-400ms (container reuse)                  |
+| Container TTL           | 60 seconds                                    |
+| Cleanup interval        | 30 seconds                                    |
 | Max concurrent sessions | ~30 (default), 4000+ (with `--configure-net`) |

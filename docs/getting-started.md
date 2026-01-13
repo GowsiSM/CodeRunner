@@ -15,6 +15,7 @@ cd CodeRunner
 ```
 
 The setup script will:
+
 1. Check all prerequisites
 2. Install npm dependencies
 3. Build Docker runtime images
@@ -27,7 +28,7 @@ Open two terminals:
 # Terminal 1 - Backend
 cd server && npm run dev
 
-# Terminal 2 - Frontend  
+# Terminal 2 - Frontend
 cd client && npm run dev
 ```
 
@@ -45,18 +46,21 @@ Then open http://localhost:5173 in your browser.
 ## Troubleshooting
 
 **Docker permission denied:**
+
 ```bash
 sudo usermod -aG docker $USER
 # Log out and back in, or run: newgrp docker
 ```
 
 **Port already in use:**
+
 ```bash
 lsof -i :3000   # Find process using port
 kill -9 <PID>   # Kill it
 ```
 
 **Docker not running:**
+
 ```bash
 sudo systemctl start docker
 ```

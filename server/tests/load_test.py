@@ -38,13 +38,24 @@ TEST_PROGRAMS = {
     "python": [
         {
             "name": "hello_world",
-            "files": [{"name": "main.py", "path": "main.py", "content": "print('Hello, World!')", "toBeExec": True}],
+            "files": [
+                {
+                    "name": "main.py",
+                    "path": "main.py",
+                    "content": "print('Hello, World!')",
+                    "toBeExec": True,
+                }
+            ],
             "expected_output": "Hello, World!",
-            "category": "quick"
+            "category": "quick",
         },
         {
             "name": "fibonacci",
-            "files": [{"name": "main.py", "path": "main.py", "content": """
+            "files": [
+                {
+                    "name": "main.py",
+                    "path": "main.py",
+                    "content": """
 def fib(n):
     if n <= 1:
         return n
@@ -52,50 +63,85 @@ def fib(n):
 
 for i in range(20):
     print(f"fib({i}) = {fib(i)}")
-""".strip(), "toBeExec": True}],
-            "category": "cpu_intensive"
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "cpu_intensive",
         },
         {
             "name": "list_operations",
-            "files": [{"name": "main.py", "path": "main.py", "content": """
+            "files": [
+                {
+                    "name": "main.py",
+                    "path": "main.py",
+                    "content": """
 import random
 data = [random.randint(1, 1000) for _ in range(10000)]
 sorted_data = sorted(data)
 print(f"Min: {min(data)}, Max: {max(data)}, Median: {sorted_data[len(data)//2]}")
-""".strip(), "toBeExec": True}],
-            "category": "memory"
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "memory",
         },
         {
             "name": "loop_counter",
-            "files": [{"name": "main.py", "path": "main.py", "content": """
+            "files": [
+                {
+                    "name": "main.py",
+                    "path": "main.py",
+                    "content": """
 total = 0
 for i in range(100000):
     total += i
 print(f"Sum of 0-99999: {total}")
-""".strip(), "toBeExec": True}],
-            "category": "cpu_intensive"
-        }
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "cpu_intensive",
+        },
     ],
     "javascript": [
         {
             "name": "hello_world",
-            "files": [{"name": "main.js", "path": "main.js", "content": "console.log('Hello from JavaScript!');", "toBeExec": True}],
+            "files": [
+                {
+                    "name": "main.js",
+                    "path": "main.js",
+                    "content": "console.log('Hello from JavaScript!');",
+                    "toBeExec": True,
+                }
+            ],
             "expected_output": "Hello from JavaScript!",
-            "category": "quick"
+            "category": "quick",
         },
         {
             "name": "array_operations",
-            "files": [{"name": "main.js", "path": "main.js", "content": """
+            "files": [
+                {
+                    "name": "main.js",
+                    "path": "main.js",
+                    "content": """
 const arr = Array.from({length: 10000}, () => Math.floor(Math.random() * 1000));
 const sum = arr.reduce((a, b) => a + b, 0);
 const avg = sum / arr.length;
 console.log(`Sum: ${sum}, Average: ${avg.toFixed(2)}`);
-""".strip(), "toBeExec": True}],
-            "category": "memory"
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "memory",
         },
         {
             "name": "prime_check",
-            "files": [{"name": "main.js", "path": "main.js", "content": """
+            "files": [
+                {
+                    "name": "main.js",
+                    "path": "main.js",
+                    "content": """
 function isPrime(n) {
     if (n < 2) return false;
     for (let i = 2; i <= Math.sqrt(n); i++) {
@@ -109,26 +155,40 @@ for (let i = 2; i < 1000; i++) {
     if (isPrime(i)) count++;
 }
 console.log(`Found ${count} primes below 1000`);
-""".strip(), "toBeExec": True}],
-            "category": "cpu_intensive"
-        }
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "cpu_intensive",
+        },
     ],
     "java": [
         {
             "name": "hello_world",
-            "files": [{"name": "Main.java", "path": "Main.java", "content": """
+            "files": [
+                {
+                    "name": "Main.java",
+                    "path": "Main.java",
+                    "content": """
 public class Main {
     public static void main(String[] args) {
         System.out.println("Hello from Java!");
     }
 }
-""".strip(), "toBeExec": True}],
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
             "expected_output": "Hello from Java!",
-            "category": "quick"
+            "category": "quick",
         },
         {
             "name": "factorial",
-            "files": [{"name": "Main.java", "path": "Main.java", "content": """
+            "files": [
+                {
+                    "name": "Main.java",
+                    "path": "Main.java",
+                    "content": """
 public class Main {
     public static long factorial(int n) {
         if (n <= 1) return 1;
@@ -141,12 +201,19 @@ public class Main {
         }
     }
 }
-""".strip(), "toBeExec": True}],
-            "category": "cpu_intensive"
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "cpu_intensive",
         },
         {
             "name": "arraylist_sort",
-            "files": [{"name": "Main.java", "path": "Main.java", "content": """
+            "files": [
+                {
+                    "name": "Main.java",
+                    "path": "Main.java",
+                    "content": """
 import java.util.*;
 
 public class Main {
@@ -161,14 +228,21 @@ public class Main {
         System.out.println("Min: " + list.get(0) + ", Max: " + list.get(list.size()-1));
     }
 }
-""".strip(), "toBeExec": True}],
-            "category": "memory"
-        }
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "memory",
+        },
     ],
     "cpp": [
         {
             "name": "hello_world",
-            "files": [{"name": "main.cpp", "path": "main.cpp", "content": """
+            "files": [
+                {
+                    "name": "main.cpp",
+                    "path": "main.cpp",
+                    "content": """
 #include <iostream>
 using namespace std;
 
@@ -176,13 +250,20 @@ int main() {
     cout << "Hello from C++!" << endl;
     return 0;
 }
-""".strip(), "toBeExec": True}],
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
             "expected_output": "Hello from C++!",
-            "category": "quick"
+            "category": "quick",
         },
         {
             "name": "vector_sort",
-            "files": [{"name": "main.cpp", "path": "main.cpp", "content": """
+            "files": [
+                {
+                    "name": "main.cpp",
+                    "path": "main.cpp",
+                    "content": """
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -199,12 +280,19 @@ int main() {
     cout << "Min: " << v.front() << ", Max: " << v.back() << endl;
     return 0;
 }
-""".strip(), "toBeExec": True}],
-            "category": "memory"
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "memory",
         },
         {
             "name": "prime_sieve",
-            "files": [{"name": "main.cpp", "path": "main.cpp", "content": """
+            "files": [
+                {
+                    "name": "main.cpp",
+                    "path": "main.cpp",
+                    "content": """
 #include <iostream>
 #include <vector>
 using namespace std;
@@ -229,10 +317,13 @@ int main() {
     cout << "Found " << count << " primes below " << n << endl;
     return 0;
 }
-""".strip(), "toBeExec": True}],
-            "category": "cpu_intensive"
-        }
-    ]
+""".strip(),
+                    "toBeExec": True,
+                }
+            ],
+            "category": "cpu_intensive",
+        },
+    ],
 }
 
 
@@ -240,9 +331,11 @@ int main() {
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class ExecutionResult:
     """Result of a single code execution"""
+
     student_id: str
     session_id: str
     language: str
@@ -261,6 +354,7 @@ class ExecutionResult:
 @dataclass
 class StudentSession:
     """Represents a student session"""
+
     student_id: str
     session_id: str
     language: str
@@ -271,6 +365,7 @@ class StudentSession:
 @dataclass
 class ResourceSnapshot:
     """Docker container resource usage snapshot"""
+
     timestamp: float
     container_count: int
     total_memory_mb: float = 0.0
@@ -281,6 +376,7 @@ class ResourceSnapshot:
 @dataclass
 class LoadTestReport:
     """Complete load test report"""
+
     test_id: str
     start_time: str
     end_time: str
@@ -305,20 +401,21 @@ class LoadTestReport:
 # Resource Monitor
 # =============================================================================
 
+
 class ResourceMonitor:
     """Monitor Docker container resources"""
-    
+
     def __init__(self, interval: float = 2.0):
         self.interval = interval
         self.snapshots: list[ResourceSnapshot] = []
         self._running = False
         self._task: Optional[asyncio.Task] = None
-    
+
     async def start(self):
         """Start monitoring"""
         self._running = True
         self._task = asyncio.create_task(self._monitor_loop())
-    
+
     async def stop(self):
         """Stop monitoring"""
         self._running = False
@@ -328,7 +425,7 @@ class ResourceMonitor:
                 await self._task
             except asyncio.CancelledError:
                 pass
-    
+
     async def _monitor_loop(self):
         """Main monitoring loop"""
         while self._running:
@@ -338,61 +435,68 @@ class ResourceMonitor:
             except Exception as e:
                 print(f"  [Monitor] Error capturing snapshot: {e}")
             await asyncio.sleep(self.interval)
-    
+
     async def _capture_snapshot(self) -> ResourceSnapshot:
         """Capture current resource state"""
         loop = asyncio.get_event_loop()
-        
+
         # Run docker stats in executor to avoid blocking
         def get_docker_stats():
             try:
                 result = subprocess.run(
-                    ['docker', 'stats', '--no-stream', '--format', 
-                     '{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}'],
-                    capture_output=True, text=True, timeout=10
+                    [
+                        "docker",
+                        "stats",
+                        "--no-stream",
+                        "--format",
+                        "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 return result.stdout
             except Exception:
                 return ""
-        
+
         stdout = await loop.run_in_executor(None, get_docker_stats)
-        
+
         containers = []
         total_memory = 0.0
         total_cpu = 0.0
-        
-        for line in stdout.strip().split('\n'):
-            if not line or 'coderunner' not in line.lower():
+
+        for line in stdout.strip().split("\n"):
+            if not line or "coderunner" not in line.lower():
                 continue
             try:
-                parts = line.split('|')
+                parts = line.split("|")
                 if len(parts) >= 3:
                     name = parts[0]
-                    cpu = float(parts[1].replace('%', ''))
-                    mem_str = parts[2].split('/')[0].strip()
-                    
+                    cpu = float(parts[1].replace("%", ""))
+                    mem_str = parts[2].split("/")[0].strip()
+
                     # Parse memory (e.g., "50.5MiB" or "1.2GiB")
-                    if 'GiB' in mem_str:
-                        mem = float(mem_str.replace('GiB', '')) * 1024
-                    elif 'MiB' in mem_str:
-                        mem = float(mem_str.replace('MiB', ''))
-                    elif 'KiB' in mem_str:
-                        mem = float(mem_str.replace('KiB', '')) / 1024
+                    if "GiB" in mem_str:
+                        mem = float(mem_str.replace("GiB", "")) * 1024
+                    elif "MiB" in mem_str:
+                        mem = float(mem_str.replace("MiB", ""))
+                    elif "KiB" in mem_str:
+                        mem = float(mem_str.replace("KiB", "")) / 1024
                     else:
                         mem = 0.0
-                    
+
                     containers.append({"name": name, "cpu": cpu, "memory_mb": mem})
                     total_memory += mem
                     total_cpu += cpu
             except (ValueError, IndexError):
                 continue
-        
+
         return ResourceSnapshot(
             timestamp=time.time(),
             container_count=len(containers),
             total_memory_mb=total_memory,
             total_cpu_percent=total_cpu,
-            containers=containers
+            containers=containers,
         )
 
 
@@ -400,9 +504,10 @@ class ResourceMonitor:
 # Student Simulator
 # =============================================================================
 
+
 class StudentSimulator:
     """Simulates a single student running code"""
-    
+
     def __init__(self, student_id: str, server_url: str):
         self.student_id = student_id
         self.server_url = server_url
@@ -412,71 +517,78 @@ class StudentSimulator:
         self._output_buffer = ""
         self._execution_complete = asyncio.Event()
         self._current_result: Optional[ExecutionResult] = None
-    
+
     async def connect(self) -> bool:
         """Connect to the CodeRunner server"""
         try:
             self.sio = socketio.AsyncClient()
-            
-            @self.sio.on('output')
+
+            @self.sio.on("output")
             async def on_output(data):
                 if self._current_result:
-                    self._output_buffer += data.get('data', '')
-            
-            @self.sio.on('execution-complete')
+                    self._output_buffer += data.get("data", "")
+
+            @self.sio.on("execution-complete")
             async def on_complete(data):
                 if self._current_result:
                     self._current_result.end_time = time.time()
-                    self._current_result.execution_time_ms = data.get('executionTime', 0)
-                    self._current_result.exit_code = data.get('exitCode', -1)
+                    self._current_result.execution_time_ms = data.get(
+                        "executionTime", 0
+                    )
+                    self._current_result.exit_code = data.get("exitCode", -1)
                     self._current_result.stdout = self._output_buffer
-                    self._current_result.success = data.get('exitCode', -1) == 0
+                    self._current_result.success = data.get("exitCode", -1) == 0
                 self._execution_complete.set()
-            
-            @self.sio.on('error')
+
+            @self.sio.on("error")
             async def on_error(data):
                 if self._current_result:
                     self._current_result.error = str(data)
                     self._current_result.success = False
                 self._execution_complete.set()
-            
+
             await self.sio.connect(self.server_url)
             return True
         except Exception as e:
             print(f"  [{self.student_id}] Connection failed: {e}")
             return False
-    
+
     async def disconnect(self):
         """Disconnect from server"""
         if self.sio and self.sio.connected:
             await self.sio.disconnect()
-    
-    async def run_program(self, language: str, program: dict, timeout: float = 30.0) -> ExecutionResult:
+
+    async def run_program(
+        self, language: str, program: dict, timeout: float = 30.0
+    ) -> ExecutionResult:
         """Run a single program"""
         self._output_buffer = ""
         self._execution_complete.clear()
-        
+
         result = ExecutionResult(
             student_id=self.student_id,
             session_id=self.session_id,
             language=language,
-            program_name=program['name'],
-            category=program.get('category', 'unknown'),
+            program_name=program["name"],
+            category=program.get("category", "unknown"),
             success=False,
             start_time=time.time(),
             end_time=0,
-            execution_time_ms=0
+            execution_time_ms=0,
         )
         self._current_result = result
-        
+
         try:
             # Emit run event
-            await self.sio.emit('run', {
-                'sessionId': self.session_id,
-                'language': language,
-                'files': program['files']
-            })
-            
+            await self.sio.emit(
+                "run",
+                {
+                    "sessionId": self.session_id,
+                    "language": language,
+                    "files": program["files"],
+                },
+            )
+
             # Wait for completion or timeout
             try:
                 await asyncio.wait_for(self._execution_complete.wait(), timeout=timeout)
@@ -484,12 +596,12 @@ class StudentSimulator:
                 result.error = "Execution timeout"
                 result.end_time = time.time()
                 result.execution_time_ms = (result.end_time - result.start_time) * 1000
-        
+
         except Exception as e:
             result.error = str(e)
             result.end_time = time.time()
             result.execution_time_ms = (result.end_time - result.start_time) * 1000
-        
+
         self.results.append(result)
         return result
 
@@ -498,10 +610,13 @@ class StudentSimulator:
 # Load Test Runner
 # =============================================================================
 
+
 class LoadTestRunner:
     """Main load test orchestrator"""
-    
-    def __init__(self, server_url: str, num_students: int = 20, output_dir: str = "./reports"):
+
+    def __init__(
+        self, server_url: str, num_students: int = 20, output_dir: str = "./reports"
+    ):
         self.server_url = server_url
         self.num_students = num_students
         self.output_dir = output_dir
@@ -509,20 +624,20 @@ class LoadTestRunner:
         self.resource_monitor = ResourceMonitor(interval=2.0)
         self.students: list[StudentSimulator] = []
         self.all_results: list[ExecutionResult] = []
-    
+
     def _assign_programs(self) -> list[tuple[str, dict]]:
         """Assign programs to students (round-robin across languages)"""
         assignments = []
         languages = list(TEST_PROGRAMS.keys())
-        
+
         for i in range(self.num_students):
             lang = languages[i % len(languages)]
             programs = TEST_PROGRAMS[lang]
             program = programs[i % len(programs)]
             assignments.append((lang, program))
-        
+
         return assignments
-    
+
     async def run_test(self) -> LoadTestReport:
         """Run the complete load test"""
         print(f"\n{'='*60}")
@@ -531,17 +646,17 @@ class LoadTestRunner:
         print(f"  Server: {self.server_url}")
         print(f"  Students: {self.num_students}")
         print(f"{'='*60}\n")
-        
+
         start_time = time.time()
         start_time_str = datetime.now().isoformat()
-        
+
         # Assign programs to students
         assignments = self._assign_programs()
-        
+
         # Start resource monitoring
         print("[1/4] Starting resource monitor...")
         await self.resource_monitor.start()
-        
+
         # Create and connect students
         print(f"[2/4] Connecting {self.num_students} students...")
         connect_tasks = []
@@ -549,11 +664,11 @@ class LoadTestRunner:
             student = StudentSimulator(f"student-{i+1:02d}", self.server_url)
             self.students.append(student)
             connect_tasks.append(student.connect())
-        
+
         connect_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
         connected_count = sum(1 for r in connect_results if r is True)
         print(f"       Connected: {connected_count}/{self.num_students}")
-        
+
         # Run programs concurrently
         print("[3/4] Running programs...")
         run_tasks = []
@@ -561,50 +676,58 @@ class LoadTestRunner:
             if student.sio and student.sio.connected:
                 lang, program = assignments[i]
                 run_tasks.append(self._run_student_program(student, lang, program))
-        
+
         await asyncio.gather(*run_tasks, return_exceptions=True)
-        
+
         # Collect all results
         for student in self.students:
             self.all_results.extend(student.results)
-        
+
         # Stop monitoring
         print("[4/4] Stopping monitors and collecting results...")
         await self.resource_monitor.stop()
-        
+
         # Disconnect all students
         disconnect_tasks = [s.disconnect() for s in self.students]
         await asyncio.gather(*disconnect_tasks, return_exceptions=True)
-        
+
         end_time = time.time()
         end_time_str = datetime.now().isoformat()
-        
+
         # Generate report
         report = self._generate_report(
             start_time_str, end_time_str, end_time - start_time
         )
-        
+
         # Save reports
         self._save_reports(report)
-        
+
         return report
-    
-    async def _run_student_program(self, student: StudentSimulator, language: str, program: dict):
+
+    async def _run_student_program(
+        self, student: StudentSimulator, language: str, program: dict
+    ):
         """Run a single student's program"""
         try:
             result = await student.run_program(language, program)
             status = "✓" if result.success else "✗"
-            print(f"  [{student.student_id}] {status} {language}/{program['name']} - {result.execution_time_ms:.0f}ms")
+            print(
+                f"  [{student.student_id}] {status} {language}/{program['name']} - {result.execution_time_ms:.0f}ms"
+            )
         except Exception as e:
             print(f"  [{student.student_id}] ✗ Error: {e}")
-    
-    def _generate_report(self, start_time: str, end_time: str, duration: float) -> LoadTestReport:
+
+    def _generate_report(
+        self, start_time: str, end_time: str, duration: float
+    ) -> LoadTestReport:
         """Generate comprehensive report"""
         successful = [r for r in self.all_results if r.success]
         failed = [r for r in self.all_results if not r.success]
-        
-        exec_times = [r.execution_time_ms for r in self.all_results if r.execution_time_ms > 0]
-        
+
+        exec_times = [
+            r.execution_time_ms for r in self.all_results if r.execution_time_ms > 0
+        ]
+
         # Group by language
         by_language = {}
         for r in self.all_results:
@@ -615,7 +738,7 @@ class LoadTestRunner:
                 by_language[r.language]["success"] += 1
             else:
                 by_language[r.language]["failed"] += 1
-        
+
         # Group by category
         by_category = {}
         for r in self.all_results:
@@ -626,11 +749,15 @@ class LoadTestRunner:
                 by_category[r.category]["success"] += 1
             else:
                 by_category[r.category]["failed"] += 1
-        
+
         # Resource peaks
-        peak_containers = max((s.container_count for s in self.resource_monitor.snapshots), default=0)
-        peak_memory = max((s.total_memory_mb for s in self.resource_monitor.snapshots), default=0.0)
-        
+        peak_containers = max(
+            (s.container_count for s in self.resource_monitor.snapshots), default=0
+        )
+        peak_memory = max(
+            (s.total_memory_mb for s in self.resource_monitor.snapshots), default=0.0
+        )
+
         return LoadTestReport(
             test_id=self.test_id,
             start_time=start_time,
@@ -641,7 +768,9 @@ class LoadTestRunner:
             total_executions=len(self.all_results),
             successful_executions=len(successful),
             failed_executions=len(failed),
-            avg_execution_time_ms=sum(exec_times) / len(exec_times) if exec_times else 0,
+            avg_execution_time_ms=(
+                sum(exec_times) / len(exec_times) if exec_times else 0
+            ),
             min_execution_time_ms=min(exec_times) if exec_times else 0,
             max_execution_time_ms=max(exec_times) if exec_times else 0,
             executions_by_language=by_language,
@@ -649,28 +778,32 @@ class LoadTestRunner:
             resource_snapshots=[asdict(s) for s in self.resource_monitor.snapshots],
             peak_containers=peak_containers,
             peak_memory_mb=peak_memory,
-            execution_results=[asdict(r) for r in self.all_results]
+            execution_results=[asdict(r) for r in self.all_results],
         )
-    
+
     def _save_reports(self, report: LoadTestReport):
         """Save JSON and HTML reports"""
         os.makedirs(self.output_dir, exist_ok=True)
-        
+
         # Save JSON report
         json_path = os.path.join(self.output_dir, f"{self.test_id}.json")
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(asdict(report), f, indent=2)
         print(f"\n  JSON Report: {json_path}")
-        
+
         # Save HTML report
         html_path = os.path.join(self.output_dir, f"{self.test_id}.html")
         self._generate_html_report(report, html_path)
         print(f"  HTML Report: {html_path}")
-    
+
     def _generate_html_report(self, report: LoadTestReport, path: str):
         """Generate HTML report with charts"""
-        success_rate = (report.successful_executions / report.total_executions * 100) if report.total_executions > 0 else 0
-        
+        success_rate = (
+            (report.successful_executions / report.total_executions * 100)
+            if report.total_executions > 0
+            else 0
+        )
+
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -742,7 +875,9 @@ class LoadTestRunner:
             <tbody>
 """
         for lang, stats in report.executions_by_language.items():
-            rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            rate = (
+                (stats["success"] / stats["total"] * 100) if stats["total"] > 0 else 0
+            )
             html += f"""                <tr>
                     <td>{lang}</td>
                     <td>{stats['total']}</td>
@@ -751,7 +886,7 @@ class LoadTestRunner:
                     <td><span class="badge {'badge-success' if rate >= 90 else 'badge-error'}">{rate:.0f}%</span></td>
                 </tr>
 """
-        
+
         html += """            </tbody>
         </table>
         
@@ -761,7 +896,9 @@ class LoadTestRunner:
             <tbody>
 """
         for cat, stats in report.executions_by_category.items():
-            rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            rate = (
+                (stats["success"] / stats["total"] * 100) if stats["total"] > 0 else 0
+            )
             html += f"""                <tr>
                     <td>{cat}</td>
                     <td>{stats['total']}</td>
@@ -770,7 +907,7 @@ class LoadTestRunner:
                     <td><span class="badge {'badge-success' if rate >= 90 else 'badge-error'}">{rate:.0f}%</span></td>
                 </tr>
 """
-        
+
         html += f"""            </tbody>
         </table>
         
@@ -785,8 +922,8 @@ class LoadTestRunner:
             <tbody>
 """
         for r in report.execution_results:
-            status_badge = 'badge-success' if r['success'] else 'badge-error'
-            status_text = '✓ Success' if r['success'] else '✗ Failed'
+            status_badge = "badge-success" if r["success"] else "badge-error"
+            status_text = "✓ Success" if r["success"] else "✗ Failed"
             html += f"""                <tr>
                     <td>{r['student_id']}</td>
                     <td>{r['language']}</td>
@@ -795,13 +932,19 @@ class LoadTestRunner:
                     <td>{r['execution_time_ms']:.0f}ms</td>
                 </tr>
 """
-        
+
         # Prepare chart data
-        timestamps = [s['timestamp'] - report.resource_snapshots[0]['timestamp'] if report.resource_snapshots else 0 
-                      for s in report.resource_snapshots]
-        containers = [s['container_count'] for s in report.resource_snapshots]
-        memory = [s['total_memory_mb'] for s in report.resource_snapshots]
-        
+        timestamps = [
+            (
+                s["timestamp"] - report.resource_snapshots[0]["timestamp"]
+                if report.resource_snapshots
+                else 0
+            )
+            for s in report.resource_snapshots
+        ]
+        containers = [s["container_count"] for s in report.resource_snapshots]
+        memory = [s["total_memory_mb"] for s in report.resource_snapshots]
+
         html += f"""            </tbody>
         </table>
     </div>
@@ -844,7 +987,7 @@ class LoadTestRunner:
 </body>
 </html>
 """
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write(html)
 
 
@@ -852,34 +995,52 @@ class LoadTestRunner:
 # Main Entry Point
 # =============================================================================
 
+
 async def main():
-    parser = argparse.ArgumentParser(description='CodeRunner Load Test Suite')
-    parser.add_argument('--students', '-n', type=int, default=20,
-                        help='Number of students to simulate (default: 20)')
-    parser.add_argument('--server', '-s', type=str, default='http://localhost:3000',
-                        help='Server URL (default: http://localhost:3000)')
-    parser.add_argument('--output', '-o', type=str, default='./reports',
-                        help='Output directory for reports (default: ./reports)')
-    
-    args = parser.parse_args()
-    
-    runner = LoadTestRunner(
-        server_url=args.server,
-        num_students=args.students,
-        output_dir=args.output
+    parser = argparse.ArgumentParser(description="CodeRunner Load Test Suite")
+    parser.add_argument(
+        "--students",
+        "-n",
+        type=int,
+        default=20,
+        help="Number of students to simulate (default: 20)",
     )
-    
+    parser.add_argument(
+        "--server",
+        "-s",
+        type=str,
+        default="http://localhost:3000",
+        help="Server URL (default: http://localhost:3000)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="./reports",
+        help="Output directory for reports (default: ./reports)",
+    )
+
+    args = parser.parse_args()
+
+    runner = LoadTestRunner(
+        server_url=args.server, num_students=args.students, output_dir=args.output
+    )
+
     try:
         report = await runner.run_test()
-        
+
         print(f"\n{'='*60}")
         print(f"  Test Complete!")
-        print(f"  Success Rate: {report.successful_executions}/{report.total_executions} ({report.successful_executions/report.total_executions*100:.1f}%)" if report.total_executions > 0 else "  No executions")
+        print(
+            f"  Success Rate: {report.successful_executions}/{report.total_executions} ({report.successful_executions/report.total_executions*100:.1f}%)"
+            if report.total_executions > 0
+            else "  No executions"
+        )
         print(f"  Avg Execution Time: {report.avg_execution_time_ms:.0f}ms")
         print(f"  Peak Containers: {report.peak_containers}")
         print(f"  Peak Memory: {report.peak_memory_mb:.1f}MB")
         print(f"{'='*60}\n")
-        
+
     except KeyboardInterrupt:
         print("\n\nTest interrupted by user.")
     except Exception as e:
@@ -887,5 +1048,5 @@ async def main():
         raise
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

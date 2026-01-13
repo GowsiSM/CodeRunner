@@ -38,6 +38,7 @@ const icons = [
   'file_type_yaml.svg',
   'file_type_text.svg',
   'file_type_excel.svg',
+  'file_type_jupyter.svg',
 ];
 
 const sourceDir = path.join(__dirname, '../node_modules/vscode-icons-ts/build/icons');

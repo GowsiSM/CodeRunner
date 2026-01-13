@@ -7,7 +7,6 @@ import { MobileWorkspace } from './components/MobileWorkspace';
 import { Workspace } from './components/Workspace';
 import { CodeEditor } from './components/CodeEditor';
 import { Console } from './components/Console';
-import { AdminPage } from './components/AdminPage';
 import { useSocket } from './hooks/useSocket';
 import { useEditorStore } from './stores/useEditorStore';
 import type { EditorState } from './stores/useEditorStore';
@@ -259,7 +258,6 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/admin" element={<AdminPage />} />
         <Route path="/" element={
           <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
             <AppContent />

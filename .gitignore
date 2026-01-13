@@ -8,3 +8,4 @@ coverage/
 server/temp/
 __pycache__/
 *.pyc
+.venv/

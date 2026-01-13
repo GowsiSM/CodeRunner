@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { exec, spawn } from 'child_process';
+import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createServer } from 'http';
@@ -9,6 +10,8 @@ import { sessionPool } from './pool';
 import { config } from './config';
 import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks } from './networkManager';
 import { kernelManager } from './kernelManager';
+
+const execAsync = promisify(exec);
 
 const app = express();
 const httpServer = createServer(app);
@@ -171,9 +174,13 @@ io.on('connection', (socket) => {
 
     // 1. Get or create session container (always with networking)
     try {
+      console.log(`[Execution] Creating container for session ${socket.id.substring(0, 8)}, language ${language}`);
       const networkName = await getOrCreateSessionNetwork(socket.id);
+      console.log(`[Execution] Network ready: ${networkName}`);
       containerId = await sessionPool.getOrCreateContainer(language, socket.id, networkName);
+      console.log(`[Execution] Container ready: ${containerId.substring(0, 12)}`);
     } catch (e: any) {
+      console.error(`[Execution] Failed to acquire container:`, e);
       socket.emit('output', { sessionId, type: 'stderr', data: `System Error: Failed to acquire container - ${e.message}\n` });
       socket.emit('exit', { sessionId, code: 1 });
       return;
@@ -219,13 +226,16 @@ io.on('connection', (socket) => {
 
     // 3. Copy files
     const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
-    exec(cpCommand, (cpError) => {
+    console.log(`[Execution] Copying files to container ${containerId.substring(0, 12)}`);
+    exec(cpCommand, { timeout: config.docker.commandTimeout }, (cpError) => {
       if (cpError) {
+        console.error(`[Execution] Failed to copy files:`, cpError);
         cleanup().catch(e => console.error('[Cleanup] Error:', e));
         socket.emit('output', { sessionId, type: 'stderr', data: `System Error (Copy): ${cpError.message}\n` });
         socket.emit('exit', { sessionId, code: 1 });
         return;
       }
+      console.log(`[Execution] Files copied successfully to ${containerId!.substring(0, 12)}`);
 
       // 4. Spawn process
       // Use -i for interactive (keeps stdin open)
@@ -237,19 +247,23 @@ io.on('connection', (socket) => {
         '/bin/sh', '-c', command
       ];
 
+      console.log(`[Execution] Spawning process: docker ${dockerArgs.join(' ')}`);
       currentProcess = spawn('docker', dockerArgs);
 
       currentProcess.stdout.on('data', (chunk: Buffer) => {
+        console.log(`[Execution] stdout data received: ${chunk.length} bytes`);
         outputBuffer.push({ sessionId, type: 'stdout', data: chunk.toString() });
         scheduleFlush();
       });
 
       currentProcess.stderr.on('data', (chunk: Buffer) => {
+        console.log(`[Execution] stderr data received: ${chunk.length} bytes`);
         outputBuffer.push({ sessionId, type: 'stderr', data: chunk.toString() });
         scheduleFlush();
       });
 
       currentProcess.on('close', (code: number) => {
+        console.log(`[Execution] Process closed with code ${code}`);
         // Flush any remaining buffered output before exit
         if (flushBufferTimer) {
           clearTimeout(flushBufferTimer);
@@ -267,6 +281,7 @@ io.on('connection', (socket) => {
       });
 
       currentProcess.on('error', (err: any) => {
+        console.error(`[Execution] Process error:`, err);
         socket.emit('output', { sessionId, type: 'stderr', data: `Process Error: ${err.message}\n` });
         cleanup().catch(e => console.error('[Cleanup] Error:', e));
       });
@@ -503,7 +518,7 @@ async function executeWithSessionContainer(
       // Copy files to container
       const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
       await new Promise<void>((res, rej) => {
-        exec(cpCommand, (err) => err ? rej(err) : res());
+        exec(cpCommand, { timeout: config.docker.commandTimeout }, (err) => err ? rej(err) : res());
       });
 
       // Execute command - use proper escaping
@@ -551,45 +566,86 @@ if (require.main === module) {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   });
 
+  // Pre-flight checks
+  async function preflightChecks(): Promise<void> {
+    console.log('[Preflight] Running Docker environment checks...');
+    
+    try {
+      // Check if Docker daemon is running
+      await execAsync('docker version', { timeout: 5000 });
+      console.log('[Preflight] ✓ Docker daemon is running');
+    } catch (error) {
+      console.error('[Preflight] ✗ Docker daemon is not running or not accessible');
+      console.error('[Preflight]   Please ensure Docker is installed and running');
+      process.exit(1);
+    }
+
+    // Check if required runtime images exist
+    const requiredImages = [
+      'python-runtime',
+      'node-runtime',
+      'java-runtime',
+      'cpp-runtime',
+      'mysql-runtime'
+    ];
+
+    for (const imageName of requiredImages) {
+      try {
+        await execAsync(`docker image inspect ${imageName}`, { timeout: 5000 });
+        console.log(`[Preflight] ✓ ${imageName} image found`);
+      } catch (error) {
+        console.error(`[Preflight] ✗ ${imageName} image not found`);
+        console.error(`[Preflight]   Run: docker build -t ${imageName} runtimes/${imageName.replace('-runtime', '')}/`);
+      }
+    }
+
+    console.log('[Preflight] Pre-flight checks complete');
+  }
+
   // Session pool uses on-demand containers - no initialization needed
   console.log('[Server] Starting with session-based container pool (on-demand + TTL)');
   
-  const server = httpServer.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Network access: http://<your-ip-address>:${PORT}`);
-  });
+  preflightChecks().then(() => {
+    const server = httpServer.listen(Number(PORT), '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Network access: http://<your-ip-address>:${PORT}`);
+    });
 
-  server.on('error', (err) => {
-    console.error('Server failed to start:', err);
+    server.on('error', (err) => {
+      console.error('Server failed to start:', err);
+      process.exit(1);
+    });
+
+    // Start TTL cleanup monitor
+    const ttlCleanupInterval = setInterval(async () => {
+      await sessionPool.cleanupExpiredContainers();
+    }, config.sessionContainers.cleanupInterval);
+
+    // Periodic cleanup of orphaned networks (every 30 minutes)
+    const networkCleanupInterval = setInterval(async () => {
+      console.log('[Cleanup] Running periodic network cleanup...');
+      await cleanupOrphanedNetworks(config.sessionContainers.autoCleanup ? 1800000 : 0);
+    }, 30 * 60 * 1000);
+
+    // Handle graceful shutdown
+    const gracefulShutdown = async () => {
+      console.log('\nShutting down server...');
+      clearInterval(ttlCleanupInterval);
+      clearInterval(networkCleanupInterval);
+      await sessionPool.cleanupAll();
+      await cleanupOrphanedNetworks(0); // Clean up all networks on shutdown
+      server.close(() => {
+        console.log('Server closed.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGINT', gracefulShutdown);
+    process.on('SIGTERM', gracefulShutdown);
+  }).catch((error) => {
+    console.error('[Server] Startup failed:', error);
     process.exit(1);
   });
-
-  // Start TTL cleanup monitor
-  const ttlCleanupInterval = setInterval(async () => {
-    await sessionPool.cleanupExpiredContainers();
-  }, config.sessionContainers.cleanupInterval);
-
-  // Periodic cleanup of orphaned networks (every 30 minutes)
-  const networkCleanupInterval = setInterval(async () => {
-    console.log('[Cleanup] Running periodic network cleanup...');
-    await cleanupOrphanedNetworks(config.sessionContainers.autoCleanup ? 1800000 : 0);
-  }, 30 * 60 * 1000);
-
-  // Handle graceful shutdown
-  const gracefulShutdown = async () => {
-    console.log('\nShutting down server...');
-    clearInterval(ttlCleanupInterval);
-    clearInterval(networkCleanupInterval);
-    await sessionPool.cleanupAll();
-    await cleanupOrphanedNetworks(0); // Clean up all networks on shutdown
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGINT', gracefulShutdown);
-  process.on('SIGTERM', gracefulShutdown);
 }
 
 export default app;

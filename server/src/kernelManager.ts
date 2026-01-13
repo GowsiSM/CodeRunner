@@ -265,7 +265,8 @@ class KernelManager {
       'tail -f /dev/null',  // Keep container alive
     ].join(' ');
 
-    const { stdout } = await execAsync(dockerCmd);
+    console.log(`[KernelManager] Executing: ${dockerCmd}`);
+    const { stdout } = await execAsync(dockerCmd, { timeout: config.docker.commandTimeout });
     const containerId = stdout.trim();
     console.log(`[KernelManager] Created kernel container ${containerId.substring(0, 12)}`);
     return containerId;
@@ -281,7 +282,7 @@ class KernelManager {
     
     try {
       // Copy script to container
-      await execAsync(`docker cp "${tempScriptPath}" ${session.containerId}:/app/kernel.py`);
+      await execAsync(`docker cp "${tempScriptPath}" ${session.containerId}:/app/kernel.py`, { timeout: config.docker.commandTimeout });
       
       // Clean up temp file
       fs.unlinkSync(tempScriptPath);

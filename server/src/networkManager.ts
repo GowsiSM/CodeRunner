@@ -1,4 +1,7 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * Network Manager for Session-based Docker Networks
@@ -16,7 +19,7 @@ const NETWORK_DRIVER = 'bridge';
  */
 export async function networkExists(networkName: string): Promise<boolean> {
   try {
-    execSync(`docker network inspect ${networkName}`, { stdio: 'pipe' });
+    await execAsync(`docker network inspect ${networkName}`, { timeout: 10000 });
     return true;
   } catch {
     return false;
@@ -31,10 +34,9 @@ export async function createSessionNetwork(sessionId: string): Promise<string> {
   
   try {
     console.log(`[NetworkManager] Creating network: ${networkName}`);
-    execSync(
-      `docker network create --driver ${NETWORK_DRIVER} ${networkName}`,
-      { stdio: 'pipe' }
-    );
+    const command = `docker network create --driver ${NETWORK_DRIVER} ${networkName}`;
+    console.log(`[NetworkManager] Executing: ${command}`);
+    await execAsync(command, { timeout: 10000 });
     console.log(`[NetworkManager] Network created: ${networkName}`);
     return networkName;
   } catch (error: any) {
@@ -51,7 +53,7 @@ export async function deleteSessionNetwork(sessionId: string): Promise<void> {
   
   try {
     console.log(`[NetworkManager] Deleting network: ${networkName}`);
-    execSync(`docker network rm ${networkName}`, { stdio: 'pipe' });
+    await execAsync(`docker network rm ${networkName}`, { timeout: 10000 });
     console.log(`[NetworkManager] Network deleted: ${networkName}`);
   } catch (error: any) {
     console.error(`[NetworkManager] Failed to delete network ${networkName}:`, error.message);
@@ -79,11 +81,11 @@ export async function getOrCreateSessionNetwork(sessionId: string): Promise<stri
  */
 export async function listSessionNetworks(): Promise<string[]> {
   try {
-    const output = execSync(
+    const { stdout } = await execAsync(
       `docker network ls --filter name=${NETWORK_PREFIX} --format "{{.Name}}"`,
-      { stdio: 'pipe', encoding: 'utf-8' }
+      { timeout: 10000 }
     );
-    return output.trim().split('\n').filter(name => name.length > 0);
+    return stdout.trim().split('\n').filter(name => name.length > 0);
   } catch (error) {
     console.error('[NetworkManager] Failed to list session networks:', error);
     return [];
@@ -101,18 +103,18 @@ export async function cleanupOrphanedNetworks(maxAgeMs: number = 3600000): Promi
     for (const networkName of networks) {
       try {
         // Get network creation time
-        const inspectOutput = execSync(
+        const { stdout: inspectOutput } = await execAsync(
           `docker network inspect ${networkName} --format "{{.Created}}"`,
-          { stdio: 'pipe', encoding: 'utf-8' }
+          { timeout: 10000 }
         );
         const createdAt = new Date(inspectOutput.trim()).getTime();
         
         // Check if network is old enough
         if (now - createdAt > maxAgeMs) {
           // Check if network has any containers
-          const containersOutput = execSync(
+          const { stdout: containersOutput } = await execAsync(
             `docker network inspect ${networkName} --format "{{len .Containers}}"`,
-            { stdio: 'pipe', encoding: 'utf-8' }
+            { timeout: 10000 }
           );
           const containerCount = parseInt(containersOutput.trim(), 10);
           

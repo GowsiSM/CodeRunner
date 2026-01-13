@@ -110,7 +110,7 @@ class SessionContainerPool {
   private async cleanContainer(containerId: string): Promise<void> {
     try {
       // Remove all files from /app directory and clean temp/build artifacts
-      await execAsync(`docker exec ${containerId} sh -c "rm -rf /app/* /app/.* /tmp/* 2>/dev/null || true"`);
+      await execAsync(`docker exec ${containerId} sh -c "rm -rf /app/* /app/.* /tmp/* 2>/dev/null || true"`, { timeout: config.docker.commandTimeout });
       console.log(`[Pool] Cleaned container ${containerId.substring(0, 12)}`);
     } catch (error: any) {
       console.error(`[Pool] Failed to clean container ${containerId.substring(0, 12)}:`, error.message);
@@ -153,8 +153,10 @@ class SessionContainerPool {
         dockerCmd += ` tail -f /dev/null`;
       }
 
-      const { stdout } = await execAsync(dockerCmd);
+      console.log(`[Pool] Executing: ${dockerCmd}`);
+      const { stdout } = await execAsync(dockerCmd, { timeout: config.docker.commandTimeout });
       const containerId = stdout.trim();
+      console.log(`[Pool] Container created successfully: ${containerId.substring(0, 12)}`);
       
       // For MySQL, wait for initialization
       if (language === 'sql') {
@@ -188,7 +190,7 @@ class SessionContainerPool {
         
         for (const container of expiredContainers) {
           try {
-            await execAsync(`docker rm -fv ${container.containerId}`);
+            await execAsync(`docker rm -fv ${container.containerId}`, { timeout: config.docker.commandTimeout });
             cleanedCount++;
             console.log(`[Pool] Deleted expired container ${container.containerId.substring(0, 12)} (unused for ${Math.floor((now - container.lastUsed) / 1000)}s)`);
           } catch (error: any) {

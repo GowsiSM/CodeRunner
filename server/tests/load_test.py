@@ -528,6 +528,18 @@ class StudentSimulator:
                 if self._current_result:
                     self._output_buffer += data.get("data", "")
 
+            @self.sio.on("exit")
+            async def on_exit(data):
+                if self._current_result:
+                    self._current_result.end_time = time.time()
+                    self._current_result.execution_time_ms = data.get(
+                        "executionTime", 0
+                    )
+                    self._current_result.exit_code = data.get("code", -1)
+                    self._current_result.stdout = self._output_buffer
+                    self._current_result.success = data.get("code", -1) == 0
+                self._execution_complete.set()
+
             @self.sio.on("execution-complete")
             async def on_complete(data):
                 if self._current_result:

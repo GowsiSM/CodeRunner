@@ -6,6 +6,7 @@ export const config = {
     memory: '128m',
     cpus: '0.5',
     timeout: '30s', // Increased to handle compilation + execution time
+    commandTimeout: 15000, // Timeout for Docker commands (ms)
   },
   sessionContainers: {
     networkPrefix: 'coderunner-session-',

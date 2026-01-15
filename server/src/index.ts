@@ -7,9 +7,12 @@ import * as path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { sessionPool } from './pool';
-import { config } from './config';
-import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats } from './networkManager';
+import { config, validateConfig } from './config';
+import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats, getSubnetStats } from './networkManager';
 import { kernelManager } from './kernelManager';
+
+// Validate configuration at startup
+validateConfig();
 
 const execAsync = promisify(exec);
 
@@ -399,16 +402,39 @@ io.on('connection', (socket) => {
 // --- API Endpoints ---
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '1.0.0' });
+  res.json({ 
+    status: 'ok', 
+    version: '1.0.0',
+    environment: config.server.env,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Network monitoring endpoint
+// Network and subnet monitoring endpoint
 app.get('/api/network-stats', async (req, res) => {
   try {
-    const stats = await getNetworkStats();
+    const networkStats = await getNetworkStats();
+    const subnetStats = getSubnetStats();
+    
     res.json({
       status: 'ok',
-      networks: stats,
+      server: {
+        environment: config.server.env,
+        port: config.server.port,
+      },
+      resources: {
+        docker: {
+          memory: config.docker.memory,
+          cpus: config.docker.cpus,
+        },
+        networkCapacity: {
+          ...subnetStats,
+          warnings: subnetStats.totalUsed > (subnetStats.totalAvailable * 0.8) 
+            ? ['Approaching subnet capacity (>80% used)']
+            : [],
+        }
+      },
+      networks: networkStats,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

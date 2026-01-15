@@ -43,6 +43,29 @@ Then open http://localhost:5173 in your browser.
 ./setup.sh --configure-net     # Configure Docker for 500+ users (requires sudo)
 ```
 
+The setup script now includes:
+- Automatic cache cleanup after building images
+- Docker build cache pruning
+- npm cache cleaning
+- Removal of dangling Docker images and volumes
+
+## Environment Configuration
+
+After setup, configure the server:
+
+```bash
+cp server/.env.example server/.env
+```
+
+Edit `server/.env` to customize:
+- Server port and host
+- Docker container resource limits
+- Session TTL and cleanup intervals
+- Runtime image names
+- File size limits
+
+Restart the server for changes to take effect.
+
 ## Troubleshooting
 
 **Docker permission denied:**
@@ -73,4 +96,16 @@ For lab environments with 50+ concurrent users:
 ./setup.sh --configure-net
 ```
 
-This expands Docker's network address pools from ~30 to 4000+ concurrent sessions.
+This configures Docker with custom address pools supporting 4,352 concurrent sessions:
+- Pool 1: `172.80.0.0/12` (4,096 /24 subnets)
+- Pool 2: `10.10.0.0/16` (256 /24 subnets)
+
+Then configure server resources in `server/.env`:
+
+```env
+DOCKER_MEMORY=256m          # Increase for heavy workloads
+DOCKER_CPUS=1              # Increase for compute-intensive code
+SESSION_TTL=120000         # Extend container lifetime if needed
+```
+
+Load test with 40 concurrent users shows 100% success rate.

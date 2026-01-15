@@ -1,79 +1,104 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { config } from './config';
 
 const execAsync = promisify(exec);
 
 /**
  * Network Manager for Session-based Docker Networks
  * 
- * This module manages Docker networks for session-based container execution.
- * Each user session gets its own isolated Docker network, allowing socket
- * programming (e.g., Java Server/Client) without port conflicts between users.
+ * Manages isolated Docker networks for code execution sessions.
+ * Each session gets its own network with an explicitly allocated subnet
+ * from configured address pools (172.80.0.0/12 and 10.10.0.0/16).
+ * 
+ * This design prevents subnet exhaustion when running many concurrent sessions.
  */
 
-const NETWORK_PREFIX = 'coderunner-session-';
-const NETWORK_DRIVER = 'bridge';
-const NETWORK_LABEL = 'type=coderunner';
+/**
+ * Subnet Allocator - Manages IP subnet allocation from custom pools
+ * Uses explicit subnet assignment to avoid Docker IPAM race conditions
+ */
+class SubnetAllocator {
+  private usedSubnets: Set<string> = new Set();
+  private poolCounters: Map<string, number> = new Map();
+
+  constructor() {
+    // Initialize counters for each pool
+    for (const pool of config.network.subnetPools) {
+      this.poolCounters.set(pool.name, 0);
+    }
+  }
+
+  allocateSubnet(): string | null {
+    // Try each pool in order
+    for (const pool of config.network.subnetPools) {
+      const counter = this.poolCounters.get(pool.name) || 0;
+      
+      if (counter < pool.capacity) {
+        const subnet = this.generateSubnet(pool, counter);
+        if (subnet) {
+          this.poolCounters.set(pool.name, counter + 1);
+          this.usedSubnets.add(subnet);
+          return subnet;
+        }
+      }
+    }
+
+    console.error('[SubnetAllocator] All address pools exhausted!');
+    return null;
+  }
+
+  private generateSubnet(pool: (typeof config.network.subnetPools)[number], counter: number): string | null {
+    if (pool.name === 'pool1') {
+      // 172.80.0.0/12 generates 4096 /24 subnets
+      const second = 80 + Math.floor(counter / 256);
+      const third = counter % 256;
+      return `172.${second}.${third}.0/24`;
+    } else if (pool.name === 'pool2') {
+      // 10.10.0.0/16 generates 256 /24 subnets
+      return `10.10.${counter}.0/24`;
+    }
+    return null;
+  }
+
+  releaseSubnet(subnet: string): void {
+    this.usedSubnets.delete(subnet);
+  }
+
+  getStats() {
+    const stats = {
+      totalUsed: 0,
+      totalAvailable: 0,
+      activeSubnets: this.usedSubnets.size,
+      poolStats: {} as Record<string, any>,
+    };
+
+    for (const pool of config.network.subnetPools) {
+      const used = this.poolCounters.get(pool.name) || 0;
+      stats.poolStats[pool.name] = {
+        used,
+        available: pool.capacity,
+        utilization: ((used / pool.capacity) * 100).toFixed(2) + '%',
+      };
+      stats.totalUsed += used;
+      stats.totalAvailable += pool.capacity;
+    }
+
+    return stats;
+  }
+}
+
+const subnetAllocator = new SubnetAllocator();
 
 /**
  * Check if a Docker network exists
  */
 export async function networkExists(networkName: string): Promise<boolean> {
   try {
-    await execAsync(`docker network inspect ${networkName}`, { timeout: 10000 });
+    await execAsync(`docker network inspect ${networkName}`, { timeout: config.docker.commandTimeout });
     return true;
   } catch {
     return false;
-  }
-}
-
-/** with labels for cleanup
- */
-export async function createSessionNetwork(sessionId: string): Promise<string> {
-  const networkName = `${NETWORK_PREFIX}${sessionId}`;
-  const command = `docker network create --driver ${NETWORK_DRIVER} --label ${NETWORK_LABEL} --label session=${sessionId} ${networkName}`;
-  
-  try {
-    console.log(`[NetworkManager] Creating network: ${networkName}`);
-    console.log(`[NetworkManager] Executing: ${command}`);
-    await execAsync(command, { timeout: 10000 });
-    console.log(`[NetworkManager] Network created: ${networkName}`);
-    return networkName;
-  } catch (error: any) {
-    console.error(`[NetworkManager] Failed to create network ${networkName}:`, error.message);
-    
-    // If creation fails due to subnet exhaustion, attempt emergency cleanup and retry once
-    if (error.message.includes('address pool') || error.message.includes('subnet')) {
-      console.log(`[NetworkManager] Subnet exhaustion detected, attempting emergency cleanup...`);
-      await emergencyNetworkCleanup();
-      
-      try {
-        await execAsync(command, { timeout: 10000 });
-        console.log(`[NetworkManager] Network created after cleanup: ${networkName}`);
-        return networkName;
-      } catch (retryError: any) {
-        throw new Error(`Failed to create session network after cleanup: ${retryError.message}`);
-      }
-    }
-    
-    console.error(`[NetworkManager] Failed to create network ${networkName}:`, error.message);
-    throw new Error(`Failed to create session network: ${error.message}`);
-  }
-}
-
-/**
- * Delete a Docker network
- */
-export async function deleteSessionNetwork(sessionId: string): Promise<void> {
-  const networkName = `${NETWORK_PREFIX}${sessionId}`;
-  
-  try {
-    console.log(`[NetworkManager] Deleting network: ${networkName}`);
-    await execAsync(`docker network rm ${networkName}`, { timeout: 10000 });
-    console.log(`[NetworkManager] Network deleted: ${networkName}`);
-  } catch (error: any) {
-    console.error(`[NetworkManager] Failed to delete network ${networkName}:`, error.message);
-    // Don't throw - network might already be deleted or not exist
   }
 }
 
@@ -81,7 +106,7 @@ export async function deleteSessionNetwork(sessionId: string): Promise<void> {
  * Get or create a session network (idempotent)
  */
 export async function getOrCreateSessionNetwork(sessionId: string): Promise<string> {
-  const networkName = `${NETWORK_PREFIX}${sessionId}`;
+  const networkName = `${config.network.sessionNetworkPrefix}${sessionId}`;
   
   const exists = await networkExists(networkName);
   if (exists) {
@@ -98,13 +123,106 @@ export async function getOrCreateSessionNetwork(sessionId: string): Promise<stri
 export async function listSessionNetworks(): Promise<string[]> {
   try {
     const { stdout } = await execAsync(
-      `docker network ls --filter name=${NETWORK_PREFIX} --format "{{.Name}}"`,
-      { timeout: 10000 }
+      `docker network ls --filter name=${config.network.sessionNetworkPrefix} --format "{{.Name}}"`,
+      { timeout: config.docker.commandTimeout }
     );
     return stdout.trim().split('\n').filter(name => name.length > 0);
   } catch (error) {
     console.error('[NetworkManager] Failed to list session networks:', error);
     return [];
+  }
+}
+
+/**
+ * Get network name from session ID
+ */
+export function getNetworkName(sessionId: string): string {
+  return `${config.network.sessionNetworkPrefix}${sessionId}`;
+}
+
+/**
+ * Get subnet allocator statistics
+ */
+export function getSubnetStats() {
+  return subnetAllocator.getStats();
+}
+
+/** 
+ * Create a session network with explicit subnet allocation
+ * Uses configured address pools to avoid Docker's default pool exhaustion
+ */
+export async function createSessionNetwork(sessionId: string): Promise<string> {
+  const networkName = `${config.network.sessionNetworkPrefix}${sessionId}`;
+  
+  // Allocate a subnet from configured pools
+  const subnet = subnetAllocator.allocateSubnet();
+  if (!subnet) {
+    throw new Error('Failed to allocate subnet: all address pools exhausted');
+  }
+
+  const command = `docker network create --driver ${config.network.networkDriver} --subnet=${subnet} --label ${config.network.networkLabel} --label session=${sessionId} ${networkName}`;
+  
+  try {
+    console.log(`[NetworkManager] Creating network: ${networkName} with subnet ${subnet}`);
+    await execAsync(command, { timeout: config.docker.commandTimeout });
+    console.log(`[NetworkManager] Network created: ${networkName}`);
+    return networkName;
+  } catch (error: any) {
+    console.error(`[NetworkManager] Failed to create network ${networkName}:`, error.message);
+    
+    // Release the subnet since network creation failed
+    subnetAllocator.releaseSubnet(subnet);
+    
+    // If creation fails due to subnet conflict, try emergency cleanup
+    if (error.message.includes('address pool') || error.message.includes('subnet') || error.message.includes('overlap')) {
+      console.log(`[NetworkManager] Subnet conflict detected, attempting emergency cleanup...`);
+      await emergencyNetworkCleanup();
+      
+      // Allocate a new subnet and retry
+      const retrySubnet = subnetAllocator.allocateSubnet();
+      if (!retrySubnet) {
+        throw new Error('Failed to allocate subnet after cleanup: all address pools exhausted');
+      }
+
+      const retryCommand = `docker network create --driver ${config.network.networkDriver} --subnet=${retrySubnet} --label ${config.network.networkLabel} --label session=${sessionId} ${networkName}`;
+      
+      try {
+        await execAsync(retryCommand, { timeout: config.docker.commandTimeout });
+        console.log(`[NetworkManager] Network created after cleanup: ${networkName} with subnet ${retrySubnet}`);
+        return networkName;
+      } catch (retryError: any) {
+        subnetAllocator.releaseSubnet(retrySubnet);
+        throw new Error(`Failed to create session network after cleanup: ${retryError.message}`);
+      }
+    }
+    
+    throw new Error(`Failed to create session network: ${error.message}`);
+  }
+}
+
+/**
+ * Delete a Docker network and release its subnet
+ */
+export async function deleteSessionNetwork(sessionId: string): Promise<void> {
+  const networkName = `${config.network.sessionNetworkPrefix}${sessionId}`;
+  
+  try {
+    // Get subnet before deleting
+    const { stdout } = await execAsync(`docker network inspect ${networkName} --format "{{range .IPAM.Config}}{{.Subnet}}{{end}}"`, { timeout: 5000 });
+    const subnet = stdout.trim();
+    
+    console.log(`[NetworkManager] Deleting network: ${networkName} (subnet: ${subnet})`);
+    await execAsync(`docker network rm ${networkName}`, { timeout: config.docker.commandTimeout });
+    console.log(`[NetworkManager] Network deleted: ${networkName}`);
+    
+    // Release subnet back to pool
+    if (subnet && subnet !== '') {
+      subnetAllocator.releaseSubnet(subnet);
+      console.log(`[NetworkManager] Subnet ${subnet} released back to pool`);
+    }
+  } catch (error: any) {
+    console.error(`[NetworkManager] Failed to delete network ${networkName}:`, error.message);
+    // Don't throw - network might already be deleted or not exist
   }
 }
 
@@ -124,7 +242,7 @@ export async function cleanupOrphanedNetworks(maxAgeMs: number = 300000): Promis
         // Get network creation time
         const { stdout: inspectOutput } = await execAsync(
           `docker network inspect ${networkName} --format "{{.Created}}"`,
-          { timeout: 10000 }
+          { timeout: config.docker.commandTimeout }
         );
         const createdAt = new Date(inspectOutput.trim()).getTime();
         const ageMs = now - createdAt;
@@ -134,13 +252,13 @@ export async function cleanupOrphanedNetworks(maxAgeMs: number = 300000): Promis
           // Check if network has any containers
           const { stdout: containersOutput } = await execAsync(
             `docker network inspect ${networkName} --format "{{len .Containers}}"`,
-            { timeout: 10000 }
+            { timeout: config.docker.commandTimeout }
           );
           const containerCount = parseInt(containersOutput.trim(), 10);
           
           if (containerCount === 0) {
             console.log(`[NetworkManager] Cleaning up orphaned network: ${networkName} (age: ${Math.floor(ageMs / 1000)}s)`);
-            const sessionId = networkName.replace(NETWORK_PREFIX, '');
+            const sessionId = networkName.replace(config.network.sessionNetworkPrefix, '');
             await deleteSessionNetwork(sessionId);
             cleanedCount++;
           }
@@ -168,7 +286,7 @@ export async function emergencyNetworkCleanup(): Promise<void> {
     
     // Docker network prune removes all unused networks matching filter
     const { stdout } = await execAsync(
-      `docker network prune -f --filter "label=${NETWORK_LABEL}"`,
+      `docker network prune -f --filter "label=${config.network.networkLabel}"`,
       { timeout: 30000 }
     );
     
@@ -187,7 +305,7 @@ export async function emergencyNetworkCleanup(): Promise<void> {
         const containerCount = parseInt(containersOutput.trim(), 10);
         
         if (containerCount === 0) {
-          const sessionId = networkName.replace(NETWORK_PREFIX, '');
+          const sessionId = networkName.replace(config.network.sessionNetworkPrefix, '');
           await deleteSessionNetwork(sessionId);
           manualCleanupCount++;
         }
@@ -267,11 +385,4 @@ export async function getNetworkStats(): Promise<{
     console.error('[NetworkManager] Failed to get network stats:', error);
     return { total: 0, withContainers: 0, empty: 0, networks: [] };
   }
-}
-
-/**
- * Get network name from session ID
- */
-export function getNetworkName(sessionId: string): string {
-  return `${NETWORK_PREFIX}${sessionId}`;
 }

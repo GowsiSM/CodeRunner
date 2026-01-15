@@ -177,6 +177,11 @@ if [ "$SKIP_DOCKER" = false ]; then
     done
     
     echo -e "  ${GREEN}✓${NC} All runtime images built"
+    
+    # Clean up Docker build cache
+    echo -e "  ${CYAN}→${NC} Cleaning Docker build cache..."
+    docker builder prune --force -a --quiet 2>/dev/null || true
+    echo -e "  ${GREEN}✓${NC} Docker build cache cleaned"
 else
     echo -e "\n${YELLOW}[3/4] Skipping Docker images (--skip-docker)${NC}"
 fi
@@ -232,8 +237,30 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────
-# Done!
+# Step 5: Clean Up Caches and Unused Resources
 # ─────────────────────────────────────────────────────────────────
+echo -e "\n${BLUE}[5/5] Cleaning up caches and unused resources...${NC}"
+
+# Clean npm cache (optional but helpful for fresh builds)
+echo -e "  ${CYAN}→${NC} Cleaning npm cache..."
+npm cache clean --force --silent 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} npm cache cleaned"
+
+# Prune dangling Docker images and build cache
+echo -e "  ${CYAN}→${NC} Pruning unused Docker images..."
+docker image prune -f --quiet 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Unused Docker images pruned"
+
+# Clean up Docker volumes that are unused (but keep named volumes)
+echo -e "  ${CYAN}→${NC} Pruning unused Docker volumes..."
+docker volume prune -f --quiet 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Unused Docker volumes pruned"
+
+# Clean npm node_modules cache in directories
+echo -e "  ${CYAN}→${NC} Cleaning workspace cache directories..."
+find "$SCRIPT_DIR" -type d -name ".npm" -exec rm -rf {} + 2>/dev/null || true
+find "$SCRIPT_DIR" -type d -name "node_modules/.cache" -exec rm -rf {} + 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Cache directories cleaned"
 echo -e "\n${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                  Setup Complete! ✓                        ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"

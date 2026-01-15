@@ -129,7 +129,7 @@ class SessionContainerPool {
     const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
     
     try {
-      const memory = language === 'sql' ? '256m' : config.docker.memory;
+      const memory = language === 'sql' ? config.docker.memorySQL : config.docker.memory;
       
       let dockerCmd = [
         'docker run -d',

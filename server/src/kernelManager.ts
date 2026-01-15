@@ -258,8 +258,8 @@ class KernelManager {
       `--label kernel=${kernelId}`,
       `--label session=${socketId}`,
       `--network ${networkName}`,
-      `--memory 512m`,  // More memory for notebooks
-      `--cpus 1`,
+      `--memory ${config.docker.memorySQL}`,  // More memory for notebook kernels
+      `--cpus ${config.docker.cpusNotebook}`, // More CPU for notebook kernels
       `-i`,  // Keep stdin open
       runtimeConfig.image,
       'tail -f /dev/null',  // Keep container alive

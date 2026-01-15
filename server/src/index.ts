@@ -8,7 +8,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { sessionPool } from './pool';
 import { config, validateConfig } from './config';
-import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats, getSubnetStats } from './networkManager';
+import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats, getSubnetStats, getNetworkMetrics } from './networkManager';
 import { kernelManager } from './kernelManager';
 
 // Validate configuration at startup
@@ -176,15 +176,42 @@ io.on('connection', (socket) => {
     }
 
     // 1. Get or create session container (always with networking)
-    try {
-      console.log(`[Execution] Creating container for session ${socket.id.substring(0, 8)}, language ${language}`);
-      const networkName = await getOrCreateSessionNetwork(socket.id);
-      console.log(`[Execution] Network ready: ${networkName}`);
-      containerId = await sessionPool.getOrCreateContainer(language, socket.id, networkName);
-      console.log(`[Execution] Container ready: ${containerId.substring(0, 12)}`);
-    } catch (e: any) {
-      console.error(`[Execution] Failed to acquire container:`, e);
-      socket.emit('output', { sessionId, type: 'stderr', data: `System Error: Failed to acquire container - ${e.message}\n` });
+    // Retry logic: if network/container creation fails, cleanup and try with new network
+    const maxRetries = 2;
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Execution] Creating container for session ${socket.id.substring(0, 8)}, language ${language} (attempt ${attempt}/${maxRetries})`);
+        const networkName = await getOrCreateSessionNetwork(socket.id);
+        console.log(`[Execution] Network ready: ${networkName}`);
+        containerId = await sessionPool.getOrCreateContainer(language, socket.id, networkName);
+        console.log(`[Execution] Container ready: ${containerId.substring(0, 12)}`);
+        break; // Success - exit retry loop
+      } catch (e: any) {
+        lastError = e;
+        console.error(`[Execution] Failed to acquire container (attempt ${attempt}/${maxRetries}):`, e.message);
+        
+        // Clean up the failed network before retrying
+        await deleteSessionNetwork(socket.id).catch(cleanupErr =>
+          console.error(`[Execution] Failed to cleanup network after error:`, cleanupErr)
+        );
+        
+        // If this was the last attempt, fail
+        if (attempt === maxRetries) {
+          socket.emit('output', { sessionId, type: 'stderr', data: `System Error: Failed to acquire container after ${maxRetries} attempts - ${e.message}\n` });
+          socket.emit('exit', { sessionId, code: 1 });
+          return;
+        }
+        
+        // Wait a bit before retrying to avoid hammering Docker
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // At this point, containerId must be set (we returned early if all retries failed)
+    if (!containerId) {
+      socket.emit('output', { sessionId, type: 'stderr', data: 'System Error: Container acquisition failed\n' });
       socket.emit('exit', { sessionId, code: 1 });
       return;
     }
@@ -442,6 +469,61 @@ app.get('/api/network-stats', async (req, res) => {
   }
 });
 
+// Cleanup metrics endpoint
+app.get('/api/cleanup-stats', async (req, res) => {
+  try {
+    const poolMetrics = sessionPool.getMetrics();
+    const networkMetrics = getNetworkMetrics();
+    const subnetStats = getSubnetStats();
+    
+    // Get current session pool status
+    const sessionCount = sessionPool.getSessionCount();
+    
+    // Add warnings if needed
+    const warnings: string[] = [];
+    if (poolMetrics.cleanupErrors > 10) {
+      warnings.push(`High container cleanup error count: ${poolMetrics.cleanupErrors}`);
+    }
+    if (networkMetrics.cleanupErrors > 10) {
+      warnings.push(`High network cleanup error count: ${networkMetrics.cleanupErrors}`);
+    }
+    if (networkMetrics.escalationLevel > 0) {
+      warnings.push(`Network cleanup escalation active (level ${networkMetrics.escalationLevel})`);
+    }
+    if (subnetStats.totalUsed > (subnetStats.totalAvailable * 0.8)) {
+      warnings.push('Subnet capacity above 80%');
+    }
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      containers: {
+        created: poolMetrics.containersCreated,
+        reused: poolMetrics.containersReused,
+        deleted: poolMetrics.containersDeleted,
+        cleanupErrors: poolMetrics.cleanupErrors,
+        lastCleanupDuration: poolMetrics.lastCleanupDuration,
+        activeSessions: sessionCount,
+      },
+      networks: {
+        created: networkMetrics.networksCreated,
+        deleted: networkMetrics.networksDeleted,
+        cleanupErrors: networkMetrics.cleanupErrors,
+        escalationLevel: networkMetrics.escalationLevel,
+        escalationDescription: networkMetrics.escalationLevel === 2 
+          ? 'CRITICAL - Emergency cleanup' 
+          : networkMetrics.escalationLevel === 1 
+          ? 'WARNING - Aggressive cleanup'
+          : 'NORMAL',
+      },
+      subnets: subnetStats,
+      warnings
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API endpoint for code execution - networking always enabled
 app.post('/api/run', async (req, res) => {
   const { language, files } = req.body;
@@ -519,11 +601,39 @@ async function executeWithSessionContainer(
     let containerId: string | null = null;
     let tempDir: string | null = null;
 
-    try {
-      // Always use session container with networking
-      const networkName = await getOrCreateSessionNetwork(sessionId);
-      containerId = await sessionPool.getOrCreateContainer(language, sessionId, networkName);
+    // Retry logic for network/container acquisition
+    const maxRetries = 2;
+    let networkCreated = false;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Always use session container with networking
+        const networkName = await getOrCreateSessionNetwork(sessionId);
+        networkCreated = true;
+        containerId = await sessionPool.getOrCreateContainer(language, sessionId, networkName);
+        break; // Success - exit retry loop
+      } catch (error: any) {
+        console.error(`[API] Failed to acquire container (attempt ${attempt}/${maxRetries}):`, error.message);
+        
+        // Clean up network if it was created
+        if (networkCreated) {
+          await deleteSessionNetwork(sessionId).catch(cleanupErr =>
+            console.error(`[API] Failed to cleanup network after error:`, cleanupErr)
+          );
+          networkCreated = false;
+        }
+        
+        // If this was the last attempt, give up
+        if (attempt === maxRetries) {
+          return resolve({ stdout: '', stderr: `System Error: Failed to acquire container after ${maxRetries} attempts - ${error.message}`, exitCode: 1 });
+        }
+        
+        // Wait before retrying
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
 
+    try {
       const runId = Date.now().toString() + Math.random().toString(36).substring(7);
       tempDir = path.resolve(__dirname, '..', 'temp', `runner-${runId}`);
 
@@ -590,6 +700,11 @@ async function executeWithSessionContainer(
         } catch (e) { /* ignore */ }
       }
       
+      // Clean up network if it was created but execution failed
+      await deleteSessionNetwork(sessionId).catch(cleanupErr =>
+        console.error(`[API] Failed to cleanup network after error:`, cleanupErr)
+      );
+      
       resolve({ stdout: '', stderr: `System Error: ${error.message}`, exitCode: 1 });
     }
   });
@@ -645,7 +760,13 @@ if (require.main === module) {
   // Session pool uses on-demand containers - no initialization needed
   console.log('[Server] Starting with session-based container pool (on-demand + TTL)');
   
-  preflightChecks().then(() => {
+  preflightChecks().then(async () => {
+    // Clean up any orphaned networks from previous runs on startup
+    console.log('[Server] Cleaning up orphaned networks from previous runs...');
+    await cleanupOrphanedNetworks(0).catch(err =>
+      console.error('[Startup] Failed to cleanup orphaned networks:', err)
+    );
+    
     const server = httpServer.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`Server running on http://localhost:${PORT}`);
       console.log(`Network access: http://<your-ip-address>:${PORT}`);
@@ -656,23 +777,71 @@ if (require.main === module) {
       process.exit(1);
     });
 
-    // Start TTL cleanup monitor
-    const ttlCleanupInterval = setInterval(async () => {
+    // Adaptive cleanup intervals based on load
+    let containerCleanupInterval = config.sessionContainers.cleanupInterval; // Default 30s
+    let networkCleanupInterval = 120000; // Default 2 minutes
+    
+    // Start TTL cleanup monitor with adaptive intervals
+    const ttlCleanupTimer = setInterval(async () => {
+      const startTime = Date.now();
       await sessionPool.cleanupExpiredContainers();
-    }, config.sessionContainers.cleanupInterval);
+      const duration = Date.now() - startTime;
+      
+      // Adapt cleanup interval based on metrics
+      const metrics = sessionPool.getMetrics();
+      const sessionCount = sessionPool.getSessionCount();
+      
+      // If we're under load (many sessions or errors), clean up more frequently
+      if (sessionCount > 50 || metrics.cleanupErrors > 5) {
+        containerCleanupInterval = Math.max(15000, containerCleanupInterval * 0.8); // Speed up, min 15s
+        console.log(`[Cleanup] High load detected (${sessionCount} sessions), reducing container cleanup interval to ${containerCleanupInterval / 1000}s`);
+      } else if (sessionCount < 10 && metrics.cleanupErrors === 0) {
+        containerCleanupInterval = Math.min(60000, containerCleanupInterval * 1.1); // Slow down, max 60s
+      }
+    }, containerCleanupInterval);
 
-    // Cleanup orphaned networks every 2 minutes
-    const networkCleanupInterval = setInterval(async () => {
-      await cleanupOrphanedNetworks(300000).catch(err => 
+    // Cleanup orphaned networks with adaptive intervals
+    // Use shorter age threshold (1 minute) to catch failed networks quickly during high load
+    const networkCleanupTimer = setInterval(async () => {
+      const startTime = Date.now();
+      const networkMetrics = getNetworkMetrics();
+      const stats = await getNetworkStats().catch(() => ({ empty: 0, total: 0 }));
+      
+      // Calculate adaptive max age based on orphaned network count
+      let maxAge = 60000; // Default 1 minute
+      if (stats.empty > 50) {
+        maxAge = 0; // Emergency: Clean all orphaned networks immediately
+        console.warn(`[Cleanup] Emergency network cleanup triggered (${stats.empty} orphaned networks)`);
+      } else if (stats.empty > 20) {
+        maxAge = 30000; // Aggressive: 30 seconds
+        console.warn(`[Cleanup] Aggressive network cleanup (${stats.empty} orphaned networks)`);
+      }
+      
+      await cleanupOrphanedNetworks(maxAge).catch(err => 
         console.error('[Cleanup Job] Orphaned networks cleanup failed:', err)
       );
-    }, 120000);
+      
+      const duration = Date.now() - startTime;
+      
+      // Adapt network cleanup interval based on metrics
+      if (stats.empty > 20 || networkMetrics.cleanupErrors > 5) {
+        networkCleanupInterval = Math.max(30000, networkCleanupInterval * 0.7); // Speed up, min 30s
+        console.log(`[Cleanup] High orphaned networks (${stats.empty}), reducing network cleanup interval to ${networkCleanupInterval / 1000}s`);
+      } else if (stats.empty < 5 && networkMetrics.cleanupErrors === 0) {
+        networkCleanupInterval = Math.min(300000, networkCleanupInterval * 1.2); // Slow down, max 5 minutes
+      }
+    }, networkCleanupInterval);
 
     // Log network statistics every 5 minutes for monitoring
     const networkStatsInterval = setInterval(async () => {
       try {
         const stats = await getNetworkStats();
+        const poolMetrics = sessionPool.getMetrics();
+        const networkMetrics = getNetworkMetrics();
+        
         console.log(`[Network Stats] Total: ${stats.total}, Active: ${stats.withContainers}, Unused: ${stats.empty}`);
+        console.log(`[Container Stats] Created: ${poolMetrics.containersCreated}, Reused: ${poolMetrics.containersReused}, Deleted: ${poolMetrics.containersDeleted}, Errors: ${poolMetrics.cleanupErrors}`);
+        console.log(`[Network Metrics] Created: ${networkMetrics.networksCreated}, Deleted: ${networkMetrics.networksDeleted}, Escalation: ${networkMetrics.escalationLevel}, Errors: ${networkMetrics.cleanupErrors}`);
       } catch (err) {
         console.error('[Stats Job] Failed to get network stats:', err);
       }
@@ -681,8 +850,8 @@ if (require.main === module) {
     // Handle graceful shutdown
     const gracefulShutdown = async () => {
       console.log('\nShutting down server...');
-      clearInterval(ttlCleanupInterval);
-      clearInterval(networkCleanupInterval);
+      clearInterval(ttlCleanupTimer);
+      clearInterval(networkCleanupTimer);
       clearInterval(networkStatsInterval);
       await sessionPool.cleanupAll();
       await cleanupOrphanedNetworks(0); // Clean up all networks on shutdown

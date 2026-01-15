@@ -383,18 +383,21 @@ class LoadTestReport:
     duration_seconds: float
     server_url: str
     num_students: int
-    total_executions: int
-    successful_executions: int
-    failed_executions: int
-    avg_execution_time_ms: float
-    min_execution_time_ms: float
-    max_execution_time_ms: float
-    executions_by_language: dict
-    executions_by_category: dict
-    resource_snapshots: list
-    peak_containers: int
-    peak_memory_mb: float
-    execution_results: list
+    mode: str
+    ramp_interval: Optional[int] = None
+    ramp_batch_size: Optional[int] = None
+    total_executions: int = 0
+    successful_executions: int = 0
+    failed_executions: int = 0
+    avg_execution_time_ms: float = 0.0
+    min_execution_time_ms: float = 0.0
+    max_execution_time_ms: float = 0.0
+    executions_by_language: dict = field(default_factory=dict)
+    executions_by_category: dict = field(default_factory=dict)
+    resource_snapshots: list = field(default_factory=list)
+    peak_containers: int = 0
+    peak_memory_mb: float = 0.0
+    execution_results: list = field(default_factory=list)
 
 
 # =============================================================================
@@ -627,11 +630,20 @@ class LoadTestRunner:
     """Main load test orchestrator"""
 
     def __init__(
-        self, server_url: str, num_students: int = 20, output_dir: str = "./reports"
+        self,
+        server_url: str,
+        num_students: int = 20,
+        output_dir: str = "./reports",
+        mode: str = "burst",
+        ramp_interval: int = 5,
+        ramp_batch_size: int = 2,
     ):
         self.server_url = server_url
         self.num_students = num_students
         self.output_dir = output_dir
+        self.mode = mode
+        self.ramp_interval = ramp_interval
+        self.ramp_batch_size = ramp_batch_size
         self.test_id = f"loadtest-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self.resource_monitor = ResourceMonitor(interval=2.0)
         self.students: list[StudentSimulator] = []
@@ -657,6 +669,11 @@ class LoadTestRunner:
         print(f"  Test ID: {self.test_id}")
         print(f"  Server: {self.server_url}")
         print(f"  Students: {self.num_students}")
+        print(f"  Mode: {self.mode.upper()}")
+        if self.mode == "ramp":
+            print(
+                f"  Ramp: {self.ramp_batch_size} users every {self.ramp_interval}s"
+            )
         print(f"{'='*60}\n")
 
         start_time = time.time()
@@ -669,27 +686,11 @@ class LoadTestRunner:
         print("[1/4] Starting resource monitor...")
         await self.resource_monitor.start()
 
-        # Create and connect students
-        print(f"[2/4] Connecting {self.num_students} students...")
-        connect_tasks = []
-        for i in range(self.num_students):
-            student = StudentSimulator(f"student-{i+1:02d}", self.server_url)
-            self.students.append(student)
-            connect_tasks.append(student.connect())
-
-        connect_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
-        connected_count = sum(1 for r in connect_results if r is True)
-        print(f"       Connected: {connected_count}/{self.num_students}")
-
-        # Run programs concurrently
-        print("[3/4] Running programs...")
-        run_tasks = []
-        for i, student in enumerate(self.students):
-            if student.sio and student.sio.connected:
-                lang, program = assignments[i]
-                run_tasks.append(self._run_student_program(student, lang, program))
-
-        await asyncio.gather(*run_tasks, return_exceptions=True)
+        # Choose execution mode
+        if self.mode == "ramp":
+            await self._run_ramp_mode(assignments)
+        else:
+            await self._run_burst_mode(assignments)
 
         # Collect all results
         for student in self.students:
@@ -728,6 +729,79 @@ class LoadTestRunner:
             )
         except Exception as e:
             print(f"  [{student.student_id}] ✗ Error: {e}")
+
+    async def _run_burst_mode(self, assignments: list[tuple[str, dict]]):
+        """Run all students at once (original mode)"""
+        # Create and connect students
+        print(f"[2/4] Connecting {self.num_students} students...")
+        connect_tasks = []
+        for i in range(self.num_students):
+            student = StudentSimulator(f"student-{i+1:02d}", self.server_url)
+            self.students.append(student)
+            connect_tasks.append(student.connect())
+
+        connect_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
+        connected_count = sum(1 for r in connect_results if r is True)
+        print(f"       Connected: {connected_count}/{self.num_students}")
+
+        # Run programs concurrently
+        print("[3/4] Running programs...")
+        run_tasks = []
+        for i, student in enumerate(self.students):
+            if student.sio and student.sio.connected:
+                lang, program = assignments[i]
+                run_tasks.append(self._run_student_program(student, lang, program))
+
+        await asyncio.gather(*run_tasks, return_exceptions=True)
+
+    async def _run_ramp_mode(self, assignments: list[tuple[str, dict]]):
+        """Gradually add users over time"""
+        print(f"[2/4] Starting ramp-up mode...")
+        print(
+            f"       Adding {self.ramp_batch_size} users every {self.ramp_interval}s"
+        )
+
+        total_batches = (self.num_students + self.ramp_batch_size - 1) // self.ramp_batch_size
+        active_tasks = []
+
+        for batch_num in range(total_batches):
+            start_idx = batch_num * self.ramp_batch_size
+            end_idx = min(start_idx + self.ramp_batch_size, self.num_students)
+            batch_size = end_idx - start_idx
+
+            print(f"\n[3/4] Batch {batch_num + 1}/{total_batches}: Adding {batch_size} users...")
+
+            # Connect new batch of students
+            batch_students = []
+            for i in range(start_idx, end_idx):
+                student = StudentSimulator(f"student-{i+1:02d}", self.server_url)
+                self.students.append(student)
+                batch_students.append(student)
+
+            # Connect students in this batch
+            connect_tasks = [s.connect() for s in batch_students]
+            connect_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
+            connected = sum(1 for r in connect_results if r is True)
+            print(f"       Connected: {connected}/{batch_size}")
+
+            # Start running programs for connected students in this batch
+            for i, student in enumerate(batch_students):
+                if student.sio and student.sio.connected:
+                    student_idx = start_idx + i
+                    lang, program = assignments[student_idx]
+                    task = asyncio.create_task(
+                        self._run_student_program(student, lang, program)
+                    )
+                    active_tasks.append(task)
+
+            # Wait for the interval before adding next batch (unless it's the last batch)
+            if batch_num < total_batches - 1:
+                await asyncio.sleep(self.ramp_interval)
+
+        # Wait for all remaining tasks to complete
+        if active_tasks:
+            print(f"\n       Waiting for all {len(active_tasks)} executions to complete...")
+            await asyncio.gather(*active_tasks, return_exceptions=True)
 
     def _generate_report(
         self, start_time: str, end_time: str, duration: float
@@ -777,6 +851,9 @@ class LoadTestRunner:
             duration_seconds=duration,
             server_url=self.server_url,
             num_students=self.num_students,
+            mode=self.mode,
+            ramp_interval=self.ramp_interval if self.mode == "ramp" else None,
+            ramp_batch_size=self.ramp_batch_size if self.mode == "ramp" else None,
             total_executions=len(self.all_results),
             successful_executions=len(successful),
             failed_executions=len(failed),
@@ -816,6 +893,10 @@ class LoadTestRunner:
             else 0
         )
 
+        mode_info = f"Mode: {report.mode.upper()}"
+        if report.mode == "ramp" and report.ramp_interval and report.ramp_batch_size:
+            mode_info += f" ({report.ramp_batch_size} users every {report.ramp_interval}s)"
+
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -852,6 +933,7 @@ class LoadTestRunner:
         <div class="header">
             <h1>🚀 CodeRunner Load Test Report</h1>
             <p class="meta">Test ID: {report.test_id} | Duration: {report.duration_seconds:.1f}s | Server: {report.server_url}</p>
+            <p class="meta">{mode_info}</p>
         </div>
         
         <div class="grid">
@@ -1031,11 +1113,36 @@ async def main():
         default="./reports",
         help="Output directory for reports (default: ./reports)",
     )
+    parser.add_argument(
+        "--mode",
+        "-m",
+        type=str,
+        choices=["burst", "ramp"],
+        default="burst",
+        help="Test mode: 'burst' (all at once) or 'ramp' (gradual) (default: burst)",
+    )
+    parser.add_argument(
+        "--ramp-interval",
+        type=int,
+        default=5,
+        help="Seconds between adding user batches in ramp mode (default: 5)",
+    )
+    parser.add_argument(
+        "--ramp-batch-size",
+        type=int,
+        default=2,
+        help="Number of users to add per interval in ramp mode (default: 2)",
+    )
 
     args = parser.parse_args()
 
     runner = LoadTestRunner(
-        server_url=args.server, num_students=args.students, output_dir=args.output
+        server_url=args.server,
+        num_students=args.students,
+        output_dir=args.output,
+        mode=args.mode,
+        ramp_interval=args.ramp_interval,
+        ramp_batch_size=args.ramp_batch_size,
     )
 
     try:

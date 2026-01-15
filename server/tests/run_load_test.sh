@@ -9,9 +9,12 @@
 #   ./run_load_test.sh [options]
 #
 # Options:
-#   -n, --students NUM    Number of students to simulate (default: 20)
-#   -s, --server URL      Server URL (default: http://localhost:3000)
-#   -h, --help           Show this help message
+#   -n, --students NUM       Number of students to simulate (default: 20)
+#   -s, --server URL         Server URL (default: http://localhost:3000)
+#   -m, --mode MODE          Test mode: 'burst' or 'ramp' (default: burst)
+#   -i, --interval SECONDS   Ramp interval in seconds (default: 5)
+#   -b, --batch SIZE         Ramp batch size (default: 2)
+#   -h, --help              Show this help message
 #
 
 set -e
@@ -23,6 +26,9 @@ VENV_DIR="${SCRIPT_DIR}/.venv"
 # Default values
 NUM_STUDENTS=20
 SERVER_URL="http://localhost:3000"
+MODE="burst"
+RAMP_INTERVAL=5
+RAMP_BATCH_SIZE=2
 
 # Colors for output
 RED='\033[0;31m'
@@ -42,17 +48,42 @@ while [[ $# -gt 0 ]]; do
             SERVER_URL="$2"
             shift 2
             ;;
+        -m|--mode)
+            MODE="$2"
+            shift 2
+            ;;
+        -i|--interval)
+            RAMP_INTERVAL="$2"
+            shift 2
+            ;;
+        -b|--batch)
+            RAMP_BATCH_SIZE="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: $0 [options]"
             echo ""
             echo "Options:"
-            echo "  -n, --students NUM    Number of students to simulate (default: 20)"
-            echo "  -s, --server URL      Server URL (default: http://localhost:3000)"
+            echo "  -n, --students NUM       Number of students to simulate (default: 20)"
+            echo "  -s, --server URL         Server URL (default: http://localhost:3000)"
+            echo "  -m, --mode MODE          Test mode: 'burst' or 'ramp' (default: burst)"
+            echo "  -i, --interval SECONDS   Ramp interval in seconds (default: 5)"
+            echo "  -b, --batch SIZE         Ramp batch size (default: 2)"
             echo "  -h, --help           Show this help message"
+            echo ""
+            echo "Modes:"
+            echo "  burst - All students connect simultaneously (stress test)"
+            echo "  ramp  - Students added gradually in batches (load ramp-up)"
+            echo ""
+            echo "Examples:"
+            echo "  $0 -n 20                    # Burst mode with 20 students"
+            echo "  $0 -n 30 -m ramp            # Ramp mode with default settings"
+            echo "  $0 -n 50 -m ramp -i 10 -b 5 # Add 5 users every 10 seconds"
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo "Unknown option: $1"
+            echo "Use -h or --help for usage information"
             exit 1
             ;;
     esac
@@ -110,14 +141,21 @@ echo ""
 echo -e "${BLUE}Starting load test...${NC}"
 echo "  Students: ${NUM_STUDENTS}"
 echo "  Server:   ${SERVER_URL}"
+echo "  Mode:     ${MODE}"
+if [[ "$MODE" == "ramp" ]]; then
+    echo "  Ramp:     ${RAMP_BATCH_SIZE} users every ${RAMP_INTERVAL}s"
+fi
 echo "  Reports:  ${REPORTS_DIR}"
 echo ""
 
-# Run the test
+# Run the load test
 python3 "${SCRIPT_DIR}/load_test.py" \
     --students "$NUM_STUDENTS" \
     --server "$SERVER_URL" \
-    --output "$REPORTS_DIR"
+    --output "$REPORTS_DIR" \
+    --mode "$MODE" \
+    --ramp-interval "$RAMP_INTERVAL" \
+    --ramp-batch-size "$RAMP_BATCH_SIZE"
 
 # Deactivate virtual environment
 deactivate

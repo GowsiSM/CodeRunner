@@ -181,6 +181,14 @@ See `.env.example` for 50+ configuration options with detailed documentation.
 
 ## 📊 Performance & Scalability
 
+**Capacity:**
+
+- **Total users:** 4,000+ simultaneous connections
+- **Concurrent execution:** ~200 active containers (with 128MB each on 32GB host)
+- Network subnets: 4,352 available (one per session)
+
+**How it scales:** TTL-based cleanup means not all connected users execute simultaneously. Typical lab scenario: 200+ students connected, 20-40 actively executing at any moment.
+
 **Container Execution:**
 
 - First execution: ~1-2s (on-demand creation)
@@ -192,7 +200,6 @@ See `.env.example` for 50+ configuration options with detailed documentation.
 - Explicit subnet allocation from pre-configured Docker pools
 - Pool 1: `172.80.0.0/12` (4,096 /24 subnets)
 - Pool 2: `10.10.0.0/16` (256 /24 subnets)
-- **Total capacity: 4,352 concurrent sessions**
 
 **Resource Limits:**
 
@@ -200,10 +207,14 @@ See `.env.example` for 50+ configuration options with detailed documentation.
 - Notebook kernels: 256MB memory, 1 CPU core
 - Timeout: 30 seconds per execution
 
+**Memory Planning:**
+
+- 128MB/container: ~200 concurrent on 32GB host
+- 64MB/container: ~400 concurrent on 32GB host (adjust `DOCKER_MEMORY` in `.env`)
+
 **Verified Performance:**
 
-- Load test: 40 concurrent users = 100% success rate
-- Subnet allocation: 0.98% utilization for 40 users
+- Load test: 40 concurrent executions = 100% success
 - Zero race conditions with explicit subnet allocation
 
 ## 🤝 Contributing

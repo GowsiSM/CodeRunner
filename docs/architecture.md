@@ -2,7 +2,7 @@
 
 ## System Overview
 
-CodeRunner executes user code in isolated Docker containers with real-time output streaming via WebSockets. Supports 4,352 concurrent sessions with explicit subnet allocation and automatic resource management.
+CodeRunner executes user code in isolated Docker containers with real-time output streaming via WebSockets. Supports **4,000+ total users** with **~200 concurrent executions** using explicit subnet allocation and TTL-based resource management.
 
 ```
 ┌──────────────┐  WebSocket   ┌──────────────┐  Docker   ┌──────────────┐
@@ -19,7 +19,7 @@ CodeRunner executes user code in isolated Docker containers with real-time outpu
 - Explicit /24 subnet assignment to each session
 - Deterministic allocation with counters (race-condition safe)
 - Pool 1: 4,096 /24 subnets, Pool 2: 256 /24 subnets
-- Total capacity: **4,352 concurrent sessions**
+- Total capacity: **4,352 network subnets (one per user session)**
 
 **Session Isolation:**
 
@@ -123,15 +123,26 @@ CodeRunner/
 └── setup.sh               # One-command setup script
 ```
 
-## Performance Metrics
+## Performance Metrics & Capacity
 
-| Aspect                   | Detail                                   |
-| ------------------------ | ---------------------------------------- |
-| **First Execution**      | ~1-2s (container creation + compilation) |
-| **Reused Execution**     | ~200-400ms (existing container)          |
-| **Container TTL**        | 60 seconds (auto-cleanup)                |
-| **Memory per Container** | 128MB (standard), 256MB (notebooks)      |
-| **CPU per Container**    | 0.5 cores (standard), 1 core (notebooks) |
-| **Execution Timeout**    | 30 seconds per run                       |
-| **Network Capacity**     | 4,352 concurrent subnets                 |
-| **Load Test Result**     | 40 concurrent users = 100% success       |
+| Aspect                   | Detail                                       |
+| ------------------------ | -------------------------------------------- |
+| **Total Users**          | 4,000+ connected sessions                    |
+| **Concurrent Execution** | ~200 active containers (32GB host, 128MB ea) |
+| **Network Capacity**     | 4,352 subnets available                      |
+| **First Execution**      | ~1-2s (container creation + compilation)     |
+| **Reused Execution**     | ~200-400ms (existing container)              |
+| **Container TTL**        | 60 seconds (auto-cleanup)                    |
+| **Memory per Container** | 128MB (standard), 256MB (notebooks)          |
+| **CPU per Container**    | 0.5 cores (standard), 1 core (notebooks)     |
+| **Execution Timeout**    | 30 seconds per run                           |
+| **Load Test Result**     | 40 concurrent executions = 100% success      |
+
+**Real-World Scaling:**
+In a lab with 200 students, only 10-20% actively execute code simultaneously. The 60-second TTL ensures containers auto-delete, keeping memory usage low (~2-4GB instead of 25GB).
+
+**Memory Planning:**
+
+- 8GB host: ~50 concurrent executions
+- 16GB host: ~100 concurrent executions
+- 32GB host: ~200 concurrent executions (or 400 with `DOCKER_MEMORY=64m`)

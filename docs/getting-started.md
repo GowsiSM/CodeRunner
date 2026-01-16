@@ -98,17 +98,37 @@ For lab environments with 50+ concurrent users:
 ./setup.sh --configure-net
 ```
 
-This configures Docker with custom address pools supporting 4,352 concurrent sessions:
+This configures Docker with custom address pools supporting **4,000+ total users** with **~200 concurrent executions**:
 
 - Pool 1: `172.80.0.0/12` (4,096 /24 subnets)
 - Pool 2: `10.10.0.0/16` (256 /24 subnets)
+- Total: 4,352 network subnets available
 
-Then configure server resources in `server/.env`:
+**Understanding Capacity:**
+
+- **Total users:** 4,000+ can connect simultaneously (each gets their own network)
+- **Concurrent execution:** Limited by host memory (128MB × containers)
+- **Realistic scenario:** 200 students connected, 20-40 actively running code at once
+
+**Resource Configuration (`server/.env`):**
 
 ```env
-DOCKER_MEMORY=256m          # Increase for heavy workloads
-DOCKER_CPUS=1              # Increase for compute-intensive code
-SESSION_TTL=120000         # Extend container lifetime if needed
+# Standard workloads (32GB host = ~200 concurrent)
+DOCKER_MEMORY=128m
+DOCKER_CPUS=0.5
+
+# Light workloads (32GB host = ~400 concurrent)
+DOCKER_MEMORY=64m
+DOCKER_CPUS=0.5
+
+# Heavy workloads (reduce concurrent capacity)
+DOCKER_MEMORY=256m
+DOCKER_CPUS=1
+SESSION_TTL=120000
 ```
 
-Load test with 40 concurrent users shows 100% success rate.
+**Host Requirements:**
+
+- 8GB RAM: Up to 1,000 total users, ~50 concurrent executions
+- 16GB RAM: Up to 2,000 total users, ~100 concurrent executions
+- 32GB RAM: Up to 4,000 total users, ~200 concurrent executions

@@ -84,6 +84,54 @@ function getRunCommand(language: string, entryFile: string): string {
   }
 }
 
+// --- Request Queue Manager ---
+// Manages concurrent execution of 'run' requests with configurable parallelism
+// Files within a single request execute sequentially to support dependencies (e.g., server→client)
+class ExecutionQueue {
+  private queue: Array<() => Promise<void>> = [];
+  private activeCount: number = 0;
+  private maxConcurrent: number;
+
+  constructor(maxConcurrent: number) {
+    this.maxConcurrent = maxConcurrent;
+  }
+
+  enqueue(task: () => Promise<void>): void {
+    this.queue.push(task);
+    this.processQueue();
+  }
+
+  private async processQueue(): Promise<void> {
+    while (this.queue.length > 0 && this.activeCount < this.maxConcurrent) {
+      const task = this.queue.shift();
+      if (!task) break;
+
+      this.activeCount++;
+      try {
+        await task();
+      } catch (error) {
+        console.error('[ExecutionQueue] Task error:', error);
+      } finally {
+        this.activeCount--;
+        // Continue processing remaining tasks
+        if (this.queue.length > 0) {
+          this.processQueue();
+        }
+      }
+    }
+  }
+
+  getStats() {
+    return {
+      queued: this.queue.length,
+      active: this.activeCount,
+      maxConcurrent: this.maxConcurrent,
+    };
+  }
+}
+
+const executionQueue = new ExecutionQueue(config.sessionContainers.maxConcurrentSessions);
+
 // --- Kernel Manager Callbacks ---
 // Set up kernel output and status streaming to clients
 kernelManager.onOutput((kernelId, output) => {
@@ -149,185 +197,195 @@ io.on('connection', (socket) => {
 
   socket.on('run', async (data: { sessionId: string; language: string, files: File[] }) => {
     const { sessionId, language, files } = data;
-    currentLanguage = language;
-    currentSessionId = sessionId;
-    manuallyStopped = false; // Reset flag for new execution
-    const startTime = Date.now(); // Track execution start time
-
-    const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
-    if (!runtimeConfig) {
-      socket.emit('output', { sessionId, type: 'stderr', data: `Error: Unsupported language '${language}'\n` });
-      socket.emit('exit', { sessionId, code: 1 });
-      return;   
-    }
-
-    // Find entry file
-    const entryFile = files.find(f => f.toBeExec);
-    if (!entryFile && language !== 'cpp' && language !== 'sql') {
-       socket.emit('output', { sessionId, type: 'stderr', data: 'Error: No entry file marked for execution.\n' });
-       socket.emit('exit', { sessionId, code: 1 });
-       return;
-    }
     
-    // For SQL, use the first .sql file if no file is marked
-    let execFile = entryFile;
-    if (!execFile && language === 'sql') {
-      execFile = files.find(f => f.name.endsWith('.sql'));
-      if (!execFile) {
-        socket.emit('output', { sessionId, type: 'stderr', data: 'Error: No SQL file found.\n' });
+    // Enqueue the execution task with configurable concurrency
+    executionQueue.enqueue(async () => {
+      currentLanguage = language;
+      currentSessionId = sessionId;
+      manuallyStopped = false; // Reset flag for new execution
+      const startTime = Date.now(); // Track execution start time
+
+      const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
+      if (!runtimeConfig) {
+        socket.emit('output', { sessionId, type: 'stderr', data: `Error: Unsupported language '${language}'\n` });
         socket.emit('exit', { sessionId, code: 1 });
-        return;
+        return;   
       }
-    }
 
-    let command = '';
-    try {
-        command = getRunCommand(language, execFile ? execFile.path : '');
-    } catch (e: any) {
-        socket.emit('output', { sessionId, type: 'stderr', data: e.message + '\n' });
-        socket.emit('exit', { sessionId, code: 1 });
-        return;
-    }
-
-    // 1. Get or create session container (always with networking)
-    // Retry logic: if network/container creation fails, cleanup and try with new network
-    const maxRetries = 2;
-    let lastError: any = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Execution] Creating container for session ${socket.id.substring(0, 8)}, language ${language} (attempt ${attempt}/${maxRetries})`);
-        const networkName = await getOrCreateSessionNetwork(socket.id);
-        console.log(`[Execution] Network ready: ${networkName}`);
-        containerId = await sessionPool.getOrCreateContainer(language, socket.id, networkName);
-        console.log(`[Execution] Container ready: ${containerId.substring(0, 12)}`);
-        break; // Success - exit retry loop
-      } catch (e: any) {
-        lastError = e;
-        console.error(`[Execution] Failed to acquire container (attempt ${attempt}/${maxRetries}):`, e.message);
-        
-        // Clean up the failed network before retrying
-        await deleteSessionNetwork(socket.id).catch(cleanupErr =>
-          console.error(`[Execution] Failed to cleanup network after error:`, cleanupErr)
-        );
-        
-        // If this was the last attempt, fail
-        if (attempt === maxRetries) {
-          socket.emit('output', { sessionId, type: 'stderr', data: `System Error: Failed to acquire container after ${maxRetries} attempts - ${e.message}\n` });
+      // Find entry file
+      const entryFile = files.find(f => f.toBeExec);
+      if (!entryFile && language !== 'cpp' && language !== 'sql') {
+         socket.emit('output', { sessionId, type: 'stderr', data: 'Error: No entry file marked for execution.\n' });
+         socket.emit('exit', { sessionId, code: 1 });
+         return;
+      }
+      
+      // For SQL, use the first .sql file if no file is marked
+      let execFile = entryFile;
+      if (!execFile && language === 'sql') {
+        execFile = files.find(f => f.name.endsWith('.sql'));
+        if (!execFile) {
+          socket.emit('output', { sessionId, type: 'stderr', data: 'Error: No SQL file found.\n' });
           socket.emit('exit', { sessionId, code: 1 });
           return;
         }
-        
-        // Wait a bit before retrying to avoid hammering Docker
-        await new Promise(resolve => setTimeout(resolve, 500));
       }
-    }
 
-    // At this point, containerId must be set (we returned early if all retries failed)
-    if (!containerId) {
-      socket.emit('output', { sessionId, type: 'stderr', data: 'System Error: Container acquisition failed\n' });
-      socket.emit('exit', { sessionId, code: 1 });
-      return;
-    }
+      let command = '';
+      try {
+          command = getRunCommand(language, execFile ? execFile.path : '');
+      } catch (e: any) {
+          socket.emit('output', { sessionId, type: 'stderr', data: e.message + '\n' });
+          socket.emit('exit', { sessionId, code: 1 });
+          return;
+      }
 
-    const runId = Date.now().toString() + Math.random().toString(36).substring(7);
-    tempDir = path.resolve(__dirname, '..', 'temp', `runner-${runId}`);
-
-    // 2. Write files (filter for C/C++ to avoid conflicts)
-    try {
-      fs.mkdirSync(tempDir, { recursive: true });
+      // 1. Get or create session container (always with networking)
+      // Retry logic: if network/container creation fails, cleanup and try with new network
+      const maxRetries = 2;
+      let lastError: any = null;
       
-      // For C/C++, filter files based on entry file extension to avoid conflicts
-      let filesToWrite = files;
-      if (language === 'cpp' && execFile) {
-        const entryExt = execFile.path.split('.').pop()?.toLowerCase();
-        if (entryExt === 'c') {
-          // Only copy .c and .h files
-          filesToWrite = files.filter(f => {
-            const ext = f.path.split('.').pop()?.toLowerCase();
-            return ext === 'c' || ext === 'h';
-          });
-        } else {
-          // Only copy C++ files (.cpp, .cc, .cxx, .c++, .hpp, .h)
-          filesToWrite = files.filter(f => {
-            const ext = f.path.split('.').pop()?.toLowerCase();
-            return ext === 'cpp' || ext === 'cc' || ext === 'cxx' || ext === 'c++' || ext === 'hpp' || ext === 'h';
-          });
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[Execution] Creating container for session ${socket.id.substring(0, 8)}, language ${language} (attempt ${attempt}/${maxRetries})`);
+          const networkName = await getOrCreateSessionNetwork(socket.id);
+          console.log(`[Execution] Network ready: ${networkName}`);
+          containerId = await sessionPool.getOrCreateContainer(language, socket.id, networkName);
+          console.log(`[Execution] Container ready: ${containerId.substring(0, 12)}`);
+          break; // Success - exit retry loop
+        } catch (e: any) {
+          lastError = e;
+          console.error(`[Execution] Failed to acquire container (attempt ${attempt}/${maxRetries}):`, e.message);
+          
+          // Clean up the failed network before retrying
+          await deleteSessionNetwork(socket.id).catch(cleanupErr =>
+            console.error(`[Execution] Failed to cleanup network after error:`, cleanupErr)
+          );
+          
+          // If this was the last attempt, fail
+          if (attempt === maxRetries) {
+            socket.emit('output', { sessionId, type: 'stderr', data: `System Error: Failed to acquire container after ${maxRetries} attempts - ${e.message}\n` });
+            socket.emit('exit', { sessionId, code: 1 });
+            return;
+          }
+          
+          // Wait a bit before retrying to avoid hammering Docker
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
-      
-      for (const file of filesToWrite) {
-        const filePath = path.join(tempDir, file.path);
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
-        fs.writeFileSync(filePath, file.content);
-      }
-    } catch (err: any) {
-      cleanup().catch(e => console.error('[Cleanup] Error:', e));
-      socket.emit('output', { sessionId, type: 'stderr', data: `System Error: ${err.message}\n` });
-      socket.emit('exit', { sessionId, code: 1 });
-      return;
-    }
 
-    // 3. Copy files
-    const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
-    console.log(`[Execution] Copying files to container ${containerId.substring(0, 12)}`);
-    exec(cpCommand, { timeout: config.docker.commandTimeout }, (cpError) => {
-      if (cpError) {
-        console.error(`[Execution] Failed to copy files:`, cpError);
-        cleanup().catch(e => console.error('[Cleanup] Error:', e));
-        socket.emit('output', { sessionId, type: 'stderr', data: `System Error (Copy): ${cpError.message}\n` });
+      // At this point, containerId must be set (we returned early if all retries failed)
+      if (!containerId) {
+        socket.emit('output', { sessionId, type: 'stderr', data: 'System Error: Container acquisition failed\n' });
         socket.emit('exit', { sessionId, code: 1 });
         return;
       }
-      console.log(`[Execution] Files copied successfully to ${containerId!.substring(0, 12)}`);
 
-      // 4. Spawn process
-      // Use -i for interactive (keeps stdin open)
-      const dockerArgs = [
-        'exec',
-        '-i', 
-        '-w', '/app',
-        containerId!,
-        '/bin/sh', '-c', command
-      ];
+      const runId = Date.now().toString() + Math.random().toString(36).substring(7);
+      tempDir = path.resolve(__dirname, '..', 'temp', `runner-${runId}`);
 
-      console.log(`[Execution] Spawning process: docker ${dockerArgs.join(' ')}`);
-      currentProcess = spawn('docker', dockerArgs);
-
-      currentProcess.stdout.on('data', (chunk: Buffer) => {
-        console.log(`[Execution] stdout data received: ${chunk.length} bytes`);
-        outputBuffer.push({ sessionId, type: 'stdout', data: chunk.toString() });
-        scheduleFlush();
-      });
-
-      currentProcess.stderr.on('data', (chunk: Buffer) => {
-        console.log(`[Execution] stderr data received: ${chunk.length} bytes`);
-        outputBuffer.push({ sessionId, type: 'stderr', data: chunk.toString() });
-        scheduleFlush();
-      });
-
-      currentProcess.on('close', (code: number) => {
-        console.log(`[Execution] Process closed with code ${code}`);
-        // Flush any remaining buffered output before exit
-        if (flushBufferTimer) {
-          clearTimeout(flushBufferTimer);
-          flushOutputBuffer();
+      // 2. Write files (filter for C/C++ to avoid conflicts)
+      try {
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        // For C/C++, filter files based on entry file extension to avoid conflicts
+        let filesToWrite = files;
+        if (language === 'cpp' && execFile) {
+          const entryExt = execFile.path.split('.').pop()?.toLowerCase();
+          if (entryExt === 'c') {
+            // Only copy .c and .h files
+            filesToWrite = files.filter(f => {
+              const ext = f.path.split('.').pop()?.toLowerCase();
+              return ext === 'c' || ext === 'h';
+            });
+          } else {
+            // Only copy C++ files (.cpp, .cc, .cxx, .c++, .hpp, .h)
+            filesToWrite = files.filter(f => {
+              const ext = f.path.split('.').pop()?.toLowerCase();
+              return ext === 'cpp' || ext === 'cc' || ext === 'cxx' || ext === 'c++' || ext === 'hpp' || ext === 'h';
+            });
+          }
         }
         
-        // Calculate execution time
-        const executionTime = Date.now() - startTime;
-        
-        // Only emit exit if not manually stopped (manual stop already emitted exit)
-        if (!manuallyStopped) {
-          socket.emit('exit', { sessionId, code, executionTime });
+        for (const file of filesToWrite) {
+          const filePath = path.join(tempDir, file.path);
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, file.content);
         }
+      } catch (err: any) {
         cleanup().catch(e => console.error('[Cleanup] Error:', e));
-      });
+        socket.emit('output', { sessionId, type: 'stderr', data: `System Error: ${err.message}\n` });
+        socket.emit('exit', { sessionId, code: 1 });
+        return;
+      }
 
-      currentProcess.on('error', (err: any) => {
-        console.error(`[Execution] Process error:`, err);
-        socket.emit('output', { sessionId, type: 'stderr', data: `Process Error: ${err.message}\n` });
-        cleanup().catch(e => console.error('[Cleanup] Error:', e));
+      // 3. Copy files
+      const cpCommand = `docker cp "${tempDir}/." ${containerId}:/app/`;
+      console.log(`[Execution] Copying files to container ${containerId.substring(0, 12)}`);
+      
+      await new Promise<void>((resolve, reject) => {
+        exec(cpCommand, { timeout: config.docker.commandTimeout }, (cpError) => {
+          if (cpError) {
+            console.error(`[Execution] Failed to copy files:`, cpError);
+            cleanup().catch(e => console.error('[Cleanup] Error:', e));
+            socket.emit('output', { sessionId, type: 'stderr', data: `System Error (Copy): ${cpError.message}\n` });
+            socket.emit('exit', { sessionId, code: 1 });
+            reject(cpError);
+            return;
+          }
+          console.log(`[Execution] Files copied successfully to ${containerId!.substring(0, 12)}`);
+
+          // 4. Spawn process
+          // Use -i for interactive (keeps stdin open)
+          const dockerArgs = [
+            'exec',
+            '-i', 
+            '-w', '/app',
+            containerId!,
+            '/bin/sh', '-c', command
+          ];
+
+          console.log(`[Execution] Spawning process: docker ${dockerArgs.join(' ')}`);
+          currentProcess = spawn('docker', dockerArgs);
+
+          currentProcess.stdout.on('data', (chunk: Buffer) => {
+            console.log(`[Execution] stdout data received: ${chunk.length} bytes`);
+            outputBuffer.push({ sessionId, type: 'stdout', data: chunk.toString() });
+            scheduleFlush();
+          });
+
+          currentProcess.stderr.on('data', (chunk: Buffer) => {
+            console.log(`[Execution] stderr data received: ${chunk.length} bytes`);
+            outputBuffer.push({ sessionId, type: 'stderr', data: chunk.toString() });
+            scheduleFlush();
+          });
+
+          currentProcess.on('close', (code: number) => {
+            console.log(`[Execution] Process closed with code ${code}`);
+            // Flush any remaining buffered output before exit
+            if (flushBufferTimer) {
+              clearTimeout(flushBufferTimer);
+              flushOutputBuffer();
+            }
+            
+            // Calculate execution time
+            const executionTime = Date.now() - startTime;
+            
+            // Only emit exit if not manually stopped (manual stop already emitted exit)
+            if (!manuallyStopped) {
+              socket.emit('exit', { sessionId, code, executionTime });
+            }
+            cleanup().catch(e => console.error('[Cleanup] Error:', e));
+            resolve();
+          });
+
+          currentProcess.on('error', (err: any) => {
+            console.error(`[Execution] Process error:`, err);
+            socket.emit('output', { sessionId, type: 'stderr', data: `Process Error: ${err.message}\n` });
+            cleanup().catch(e => console.error('[Cleanup] Error:', e));
+            reject(err);
+          });
+        });
       });
     });
   });

@@ -43,8 +43,8 @@ export const config = {
       },
       {
         name: 'pool2',
-        base: '10.10',
-        cidr: '10.10.0.0/16',
+        base: '192.168',
+        cidr: '192.168.0.0/16',
         capacity: 256, // 2^(24-16) /24 subnets
       },
     ],
@@ -56,6 +56,9 @@ export const config = {
     ttl: parseInt(process.env.SESSION_TTL || '60000', 10), // 1 minute
     cleanupInterval: parseInt(process.env.CLEANUP_INTERVAL || '30000', 10), // 30 seconds
     orphanedNetworkAge: parseInt(process.env.ORPHANED_NETWORK_AGE || '300000', 10), // 5 minutes
+    
+    // Concurrency control for parallel execution requests
+    maxConcurrentSessions: parseInt(process.env.MAX_CONCURRENT_SESSIONS || '5', 10), // Number of simultaneous run requests
     
     // Pooling configuration
     maxPerSession: parseInt(process.env.MAX_CONTAINERS_PER_SESSION || '10', 10),

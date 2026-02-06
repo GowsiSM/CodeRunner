@@ -78,8 +78,8 @@ class SubnetAllocator {
       const third = counter % 256;
       return `172.${second}.${third}.0/24`;
     } else if (pool.name === 'pool2') {
-      // 10.10.0.0/16 generates 256 /24 subnets
-      return `10.10.${counter}.0/24`;
+      // 192.168.0.0/16 generates 256 /24 subnets
+      return `192.168.${counter}.0/24`;
     }
     return null;
   }

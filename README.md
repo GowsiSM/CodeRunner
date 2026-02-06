@@ -73,7 +73,7 @@ CodeRunner is a web-based code execution platform designed for educational lab e
 
    ```bash
    cd runtimes/python && docker build -t python-runtime .
-   cd ../javascript && docker build -t node-runtime .
+   cd ../javascript && docker build -t javascript-runtime .
    cd ../java && docker build -t java-runtime .
    cd ../cpp && docker build -t cpp-runtime .
    ```

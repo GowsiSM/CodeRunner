@@ -752,7 +752,7 @@ if (require.main === module) {
     // Check if required runtime images exist
     const requiredImages = [
       'python-runtime',
-      'node-runtime',
+      'javascript-runtime',
       'java-runtime',
       'cpp-runtime',
       'mysql-runtime'

@@ -13,7 +13,7 @@
 # Options:
 #   --skip-docker    Skip building Docker images
 #   --skip-deps      Skip installing npm dependencies
-#   --configure-net  Configure Docker for 500+ concurrent networks (requires sudo)
+#   --skip-net       Skip network configuration (network config enabled by default)
 #   -h, --help       Show this help message
 #
 
@@ -43,7 +43,7 @@ chmod +x "${SCRIPT_DIR}/server/tests/run_load_test.sh" 2>/dev/null || true
 # Default options
 SKIP_DOCKER=false
 SKIP_DEPS=false
-CONFIGURE_NET=false
+CONFIGURE_NET=true  # Network config now enabled by default for college deployment
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -60,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             CONFIGURE_NET=true
             shift
             ;;
+        --skip-net)
+            CONFIGURE_NET=false
+            shift
+            ;;
         -h|--help)
             echo "CodeRunner Setup Script"
             echo ""
@@ -68,7 +72,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --skip-docker    Skip building Docker images"
             echo "  --skip-deps      Skip installing npm dependencies"
-            echo "  --configure-net  Configure Docker for high concurrency (requires sudo)"
+            echo "  --skip-net       Skip network configuration (default: enabled)"
             echo "  -h, --help       Show this help message"
             exit 0
             ;;
@@ -192,12 +196,16 @@ fi
 # ─────────────────────────────────────────────────────────────────
 if [ "$CONFIGURE_NET" = true ]; then
     echo ""
-    log_info "Step 4/4: Configuring Network Limits..."
+    log_info "Step 4/4: Configuring Network Limits (required for 500+ concurrent sessions)..."
     
     # Check for sudo
     if [ "$EUID" -ne 0 ]; then 
-        log_warn "Root privileges needed to configure sysctl limits."
-        echo "Please run: sudo $0 --configure-net"
+        log_warn "Root privileges needed to apply sysctl kernel settings."
+        echo "Applying network configuration now (requires your password)..."
+        if ! sudo -p "Enter sudo password to apply network configuration: " "$0" --configure-net; then
+            log_error "Failed to apply network configuration"
+            exit 1
+        fi
     else
         echo "Applying sysctl settings for high concurrency..."
         if [ "$(uname)" == "Linux" ]; then
@@ -210,7 +218,7 @@ if [ "$CONFIGURE_NET" = true ]; then
     fi
 else
     echo ""
-    log_info "Step 4/4: Configuration skipped (use --configure-net to enable)"
+    log_info "Step 4/4: Network configuration skipped (use --skip-net=false to enable)"
 fi
 
 echo ""

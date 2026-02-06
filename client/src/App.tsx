@@ -2,6 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useCallback, useEffect, useRef } from 'react';
 import './App.css';
 import { ThemeProvider } from './components/theme-provider';
+import { Toaster } from './components/ui/toaster';
+import { HomePage } from './components/HomePage';
+import { LabPage } from './components/LabPage';
 import { ResponsiveNavbar } from './components/ResponsiveNavbar';
 import { MobileWorkspace } from './components/MobileWorkspace';
 import { Workspace } from './components/Workspace';
@@ -14,7 +17,7 @@ import type { EditorState } from './stores/useEditorStore';
 import { getLanguageFromExtension, flattenTree, isLanguageSupported, isDataFile } from './lib/file-utils';
 import { cn } from './lib/utils';
 
-function AppContent() {
+function EditorPage() {
   const { runCode, stopCode, disconnect } = useSocket();
   const files = useEditorStore((state: EditorState) => state.files);
   const rootIds = useEditorStore((state: EditorState) => state.rootIds);
@@ -240,14 +243,15 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={
-          <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-            <AppContent />
-          </ThemeProvider>
-        } />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <Toaster />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/editor" element={<EditorPage />} />
+          <Route path="/lab" element={<LabPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ThemeProvider>
     </Router>
   );
 }

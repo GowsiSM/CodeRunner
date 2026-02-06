@@ -29,13 +29,22 @@ function AppContent() {
 
   // Panel sizing state (desktop only)
   const [sidebarWidth, setSidebarWidth] = useState(250);
-  const [consoleHeight, setConsoleHeight] = useState(200);
-  const [isConsoleMinimized, setIsConsoleMinimized] = useState(false);
+  const [isConsoleMinimized, setIsConsoleMinimized] = useState(true); // Start closed
   
   // Resize state (desktop only)
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const [isResizingConsole, setIsResizingConsole] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track if any code is running to auto-expand console
+  const consoles = useEditorStore((state: EditorState) => state.consoles);
+  const isAnyCodeRunning = Object.values(consoles).some(c => c.isRunning);
+
+  // Auto-expand console when code starts running
+  useEffect(() => {
+    if (isAnyCodeRunning) {
+      setIsConsoleMinimized(false);
+    }
+  }, [isAnyCodeRunning]);
 
   // Detect mobile/tablet viewport (< 1024px for sidebar menu)
   useEffect(() => {
@@ -96,8 +105,6 @@ function AppContent() {
       }));
 
     if (compatibleFiles.length > 0 && activeFileId) {
-      // Expand console when running code
-      setIsConsoleMinimized(false);
       runCode(activeFileId, activeFile.path, compatibleFiles, activeLanguage);
     }
   }, [activeFileId, files, rootIds, runCode]);
@@ -125,22 +132,16 @@ function AppContent() {
         const newWidth = Math.max(200, Math.min(500, e.clientX));
         setSidebarWidth(newWidth);
       }
-      if (isResizingConsole && containerRef.current && !isConsoleMinimized) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const newHeight = Math.max(150, Math.min(600, containerRect.bottom - e.clientY));
-        setConsoleHeight(newHeight);
-      }
     };
 
     const handleMouseUp = () => {
       setIsResizingSidebar(false);
-      setIsResizingConsole(false);
     };
 
-    if (isResizingSidebar || isResizingConsole) {
+    if (isResizingSidebar) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = isResizingSidebar ? 'col-resize' : 'row-resize';
+      document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     }
 
@@ -150,10 +151,7 @@ function AppContent() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isResizingSidebar, isResizingConsole, isConsoleMinimized, isMobile]);
-
-  // Calculate the actual console height based on minimized state
-  const actualConsoleHeight = isConsoleMinimized ? 52 : consoleHeight; // 52px for header only
+  }, [isResizingSidebar, isMobile]);
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
@@ -207,45 +205,26 @@ function AppContent() {
         {/* Right side: Editor + Console */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Code Editor */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div 
+            className={cn(
+              "min-h-0 overflow-hidden transition-all duration-500 ease-in-out",
+              isConsoleMinimized ? "flex-1" : "flex-[2_1_40%]"
+            )}
+          >
             <CodeEditor 
               onRunClick={handleRunClick}
               onStopClick={handleStopClick}
             />
           </div>
 
-          {/* Console Resize Handle - Only show when not minimized and not mobile */}
-          {!isConsoleMinimized && !isMobile && (
-            <div
-              className={cn(
-                "group relative h-1 w-full flex-shrink-0 transition-all cursor-row-resize hover:h-1.5",
-                isResizingConsole 
-                  ? 'bg-primary h-1.5' 
-                  : 'bg-border hover:bg-primary/60'
-              )}
-              onMouseDown={() => setIsResizingConsole(true)}
-            >
-              {/* Visual indicator on hover */}
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="h-full w-full bg-primary/20" />
-              </div>
-              {/* Center grip indicator */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex gap-1 p-1 rounded bg-primary/10">
-                  <div className="w-3 h-0.5 bg-primary/60 rounded-full" />
-                  <div className="w-3 h-0.5 bg-primary/60 rounded-full" />
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Console */}
           <div 
             className={cn(
-              "flex-shrink-0 overflow-hidden transition-all duration-200",
-              isMobile && "h-2/5" // Fixed height on mobile
+              "border-t overflow-hidden transition-all duration-500 ease-in-out",
+              isConsoleMinimized 
+                ? "flex-[0_0_2.5rem]" 
+                : "flex-[3_1_60%]"
             )}
-            style={!isMobile ? { height: actualConsoleHeight } : undefined}
           >
             <Console 
               isMinimized={isConsoleMinimized}

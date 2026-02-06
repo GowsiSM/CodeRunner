@@ -4,6 +4,8 @@ import { MobileWorkspace } from '@/components/MobileWorkspace';
 import { Workspace } from '@/components/Workspace';
 import { CodeEditor } from '@/components/CodeEditor';
 import { Console } from '@/components/Console';
+import { useEditorStore } from '@/stores/useEditorStore';
+import type { EditorState } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 
 interface ResponsiveLayoutProps {
@@ -14,7 +16,18 @@ interface ResponsiveLayoutProps {
 export function ResponsiveLayout({ onRunClick, onStopClick }: ResponsiveLayoutProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [isConsoleMinimized, setIsConsoleMinimized] = useState(false);
+  const [isConsoleMinimized, setIsConsoleMinimized] = useState(true); // Start closed
+
+  // Track if any code is running to auto-expand console
+  const consoles = useEditorStore((state: EditorState) => state.consoles);
+  const isAnyCodeRunning = Object.values(consoles).some(console => console.isRunning);
+
+  // Auto-expand console when code starts running, collapse when it stops
+  useEffect(() => {
+    if (isAnyCodeRunning) {
+      setIsConsoleMinimized(false);
+    }
+  }, [isAnyCodeRunning]);
 
   // Detect mobile/tablet viewport (< 1024px for sidebar menu)
   useEffect(() => {
@@ -73,7 +86,7 @@ export function ResponsiveLayout({ onRunClick, onStopClick }: ResponsiveLayoutPr
           <div 
             className={cn(
               "overflow-hidden transition-all duration-500 ease-in-out",
-              isConsoleMinimized ? "flex-1" : "flex-[1_1_50%]"
+              isConsoleMinimized ? "flex-1" : "flex-[1_1_40%]"
             )}
           >
             <CodeEditor onRunClick={onRunClick} onStopClick={onStopClick} />
@@ -83,7 +96,7 @@ export function ResponsiveLayout({ onRunClick, onStopClick }: ResponsiveLayoutPr
           <div 
             className={cn(
               "border-t overflow-hidden transition-all duration-500 ease-in-out",
-              isConsoleMinimized ? "flex-[0_0_2.5rem]" : "flex-[1_1_50%]"
+              isConsoleMinimized ? "flex-[0_0_2.5rem]" : "flex-[1_1_60%]"
             )}
           >
             <Console

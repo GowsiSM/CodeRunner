@@ -26,6 +26,7 @@ const icons = [
   'file_type_cppheader.svg',
   'file_type_js.svg',
   'file_type_js_official.svg',
+  'file_type_light_js.svg',
   'file_type_typescript.svg',
   'file_type_typescript_official.svg',
   'file_type_typescriptdef.svg',

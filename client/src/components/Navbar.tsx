@@ -3,12 +3,16 @@ import { useState, useEffect } from "react"
 import { useTheme } from "./theme-provider"
 import fabricLogo from "../assets/fabric.png"
 import codeRunnerLogo from "../assets/CodeRunner.png"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import KeyboardShortcutsModal from "./KeyboardShortcutsModal";
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
-  const [showWarning, setShowWarning] = useState(true)
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   useEffect(() => {
@@ -32,24 +36,6 @@ export function Navbar() {
 
   return (
     <div className="flex flex-col">
-      {/* Warning Banner */}
-      {showWarning && (
-        <Alert variant="default" className="rounded-none border-x-0 border-t-0 bg-amber-500/10 border-amber-500/30">
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
-          <AlertDescription className="text-amber-600 dark:text-amber-400 text-sm">
-            <strong>Warning:</strong> Your work is temporary and will be lost when you close this tab. 
-            This is a session-based editor — data is not saved to a server.
-          </AlertDescription>
-          <button
-            aria-label="Dismiss warning"
-            onClick={() => setShowWarning(false)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded text-amber-500 hover:bg-amber-500/20 text-lg leading-none"
-          >
-            ×
-          </button>
-        </Alert>
-      )}
-
       {/* Navbar - Redesigned */}
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center px-6 gap-6">
@@ -83,6 +69,20 @@ export function Navbar() {
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Warning Icon with Tooltip */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all h-10 w-10 cursor-help">
+                  <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-sm">Your work is temporary and will be lost when you close this tab.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           {/* Theme Toggle */}
           <button

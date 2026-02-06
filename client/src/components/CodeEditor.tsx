@@ -59,56 +59,6 @@ export function CodeEditor({ onRunClick, onStopClick }: CodeEditorProps) {
     });
   }, []);
 
-  const handleEditorMount = useCallback((editor: any, monaco: Monaco) => {
-    const dom = editor.getDomNode?.();
-    if (!dom) return;
-
-    const onPaste = (e: ClipboardEvent) => {
-      e.preventDefault();
-      // keep focus in editor
-      try { editor.focus(); } catch {}
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      // Block Ctrl/Cmd+V, Shift+Insert
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
-        e.preventDefault();
-      }
-      if (e.shiftKey && e.key === 'Insert') {
-        e.preventDefault();
-      }
-    };
-
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const onDragOver = (e: DragEvent) => {
-      e.preventDefault();
-    };
-
-    dom.addEventListener('paste', onPaste);
-    dom.addEventListener('keydown', onKeyDown);
-    dom.addEventListener('drop', onDrop);
-    dom.addEventListener('dragover', onDragOver);
-
-    const dispose = () => {
-      try {
-        dom.removeEventListener('paste', onPaste);
-        dom.removeEventListener('keydown', onKeyDown);
-        dom.removeEventListener('drop', onDrop);
-        dom.removeEventListener('dragover', onDragOver);
-      } catch {}
-    };
-
-    // Clean up when editor is disposed
-    try {
-      editor.onDidDispose(dispose);
-    } catch {
-      // fallback: remove listeners when window unloads
-      window.addEventListener('unload', dispose);
-    }
   const handleEditorDidMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
     // Store editor reference
     editorRef.current = editor;
@@ -322,7 +272,7 @@ export function CodeEditor({ onRunClick, onStopClick }: CodeEditorProps) {
               onChange={handleEditorChange}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               beforeMount={handleEditorWillMount}
-              onMount={handleEditorMount}
+              onMount={handleEditorDidMount}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
@@ -331,30 +281,11 @@ export function CodeEditor({ onRunClick, onStopClick }: CodeEditorProps) {
                 automaticLayout: true,
                 scrollBeyondLastLine: false,
                 tabSize: 2,
+                // Disable Monaco's context menu
+                contextmenu: false,
               }}
             />
           )}
-        <div className="flex-1 min-h-0">
-          <Editor
-            height="100%"
-            language={language}
-            value={activeFile?.content ?? ''}
-            onChange={handleEditorChange}
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
-            beforeMount={handleEditorWillMount}
-            onMount={handleEditorDidMount}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              padding: { top: 16 },
-              wordWrap: 'on',
-              automaticLayout: true,
-              scrollBeyondLastLine: false,
-              tabSize: 2,
-              // Disable Monaco's context menu
-              contextmenu: false,
-            }}
-          />
         </div>
       </div>
     </TooltipProvider>

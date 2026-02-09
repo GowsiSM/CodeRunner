@@ -48,7 +48,6 @@ fi
 
 # Ensure helper scripts are executable
 chmod +x "${SCRIPT_DIR}/cleanup.sh" 2>/dev/null || true
-chmod +x "${SCRIPT_DIR}/server/tests/run_load_test.sh" 2>/dev/null || true
 
 # Default options
 SKIP_DOCKER=false

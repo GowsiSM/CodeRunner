@@ -13,7 +13,6 @@ import { sessionPool } from './pool';
 import { config, validateConfig } from './config';
 import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats, getSubnetStats, getNetworkMetrics } from './networkManager';
 import { kernelManager } from './kernelManager';
-import { getCleanupWorker, shutdownCleanupWorker } from './cleanupWorker';
 
 // Re-read environment variables into config after dotenv load
 (config.docker as any).memory = process.env.DOCKER_MEMORY || '512m';
@@ -1008,9 +1007,6 @@ if (require.main === module) {
       process.exit(1);
     });
 
-    // Initialize cleanup worker for non-blocking cleanup
-    const cleanupWorker = getCleanupWorker();
-    
     // Adaptive cleanup intervals based on load
     let containerCleanupInterval = config.sessionContainers.cleanupInterval; // Default 30s
     let networkCleanupInterval = 120000; // Default 2 minutes
@@ -1099,9 +1095,6 @@ if (require.main === module) {
       clearInterval(ttlCleanupTimer);
       clearInterval(networkCleanupTimer);
       clearInterval(networkStatsInterval);
-      
-      // Shutdown cleanup worker
-      await shutdownCleanupWorker();
       
       await sessionPool.cleanupAll();
       await cleanupOrphanedNetworks(0); // Clean up all networks on shutdown

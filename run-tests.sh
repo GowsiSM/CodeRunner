@@ -67,6 +67,10 @@ echo -e "${BLUE}========================================${NC}"
 
 if [ "$SERVER_PASS" = true ] && [ "$CLIENT_PASS" = true ]; then
     echo -e "${GREEN}✓ All tests passed!${NC}"
+    echo ""
+    echo -e "${YELLOW}Additional Testing:${NC}"
+    echo "  Load tests: cd server/tests/load-test-java && ./run-load-test.sh"
+    echo "  Documentation: docs/testing.md"
     exit 0
 else
     echo -e "${RED}✗ Some tests failed${NC}"

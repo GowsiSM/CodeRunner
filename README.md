@@ -123,7 +123,7 @@ For detailed information about the project, please refer to the documentation in
 # Server tests only
 cd server && npm test
 
-# Client tests only  
+# Client tests only
 cd client && npm run test:run
 
 # Load testing
@@ -149,11 +149,13 @@ java -jar target/load-tester-1.0.0-jar-with-dependencies.jar \
 ```
 
 **Performance Targets:**
+
 - Success rate: ≥95%
 - P95 response time: <10s
 - Concurrent users: 60+
 
 📖 **Full documentation:**
+
 - [Testing Guide](docs/testing.md) - All test commands and procedures
 - [Load Test README](server/tests/load-test-java/README.md) - Detailed load testing guide
 - [Queue Architecture](docs/queue-architecture.md) - System design and monitoring
@@ -226,41 +228,39 @@ See `.env.example` for 50+ configuration options with detailed documentation.
 
 ## 📊 Performance & Scalability
 
-**Capacity:**
+**System Capacity:**
 
 - **Total users:** 4,000+ simultaneous connections
-- **Concurrent execution:** ~200 active containers (with 128MB each on 32GB host)
-- Network subnets: 4,352 available (one per session)
+- **Concurrent execution:** 50 active containers (configurable)
+- **Network subnets:** 4,352 available (one per session)
 
-**How it scales:** TTL-based cleanup means not all connected users execute simultaneously. Typical lab scenario: 200+ students connected, 20-40 actively executing at any moment.
-
-**Container Execution:**
+**Execution Performance:**
 
 - First execution: ~1-2s (on-demand creation)
 - Subsequent runs: ~200-400ms (container reuse)
-- 60-second TTL with automatic cleanup
+- TTL: 30 seconds (configurable)
 
-**Network Architecture:**
+**Load Test Results (60 users, 30 concurrent):**
 
-- Explicit subnet allocation from pre-configured Docker pools
-- Pool 1: `172.80.0.0/12` (4,096 /24 subnets)
-- Pool 2: `10.10.0.0/16` (256 /24 subnets)
+- Success rate: 99.6%
+- P50 response time: 421ms
+- P95 response time: 712ms
+- Average: 435ms
 
-**Resource Limits:**
+**Resource Efficiency:**
 
 - Standard containers: 128MB memory, 0.5 CPU cores
-- Notebook kernels: 256MB memory, 1 CPU core
-- Timeout: 30 seconds per execution
+- Typical lab scenario: 200+ students connected, 20-40 actively executing
+- Memory planning: 128MB/container = ~200 concurrent on 32GB host
 
-**Memory Planning:**
+**Queue Architecture:**
 
-- 128MB/container: ~200 concurrent on 32GB host
-- 64MB/container: ~400 concurrent on 32GB host (adjust `DOCKER_MEMORY` in `.env`)
+- Priority-based scheduling (WebSocket > API > Notebooks)
+- Non-blocking parallel execution up to 50 concurrent sessions
+- Queue capacity: 200 pending requests
+- Automatic timeout protection (60s)
 
-**Verified Performance:**
-
-- Load test: 40 concurrent executions = 100% success
-- Zero race conditions with explicit subnet allocation
+📖 **Learn more:** [Queue Architecture Documentation](docs/queue-architecture.md)
 
 ## 🤝 Contributing
 

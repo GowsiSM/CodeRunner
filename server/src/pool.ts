@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { config } from './config';
+import { adminMetrics } from './adminMetrics';
 
 const execAsync = promisify(exec);
 
@@ -216,6 +217,9 @@ class SessionContainerPool {
     const containerId = await this.createContainer(language, sessionId, networkName);
     
     this.metrics.containersCreated++;
+    
+    // Track container creation for admin metrics
+    adminMetrics.trackContainerCreated(containerId);
 
     // Add to pool
     const newContainer: SessionContainer = {

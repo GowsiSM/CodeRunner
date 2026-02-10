@@ -14,6 +14,8 @@ import { config, validateConfig } from './config';
 import { getOrCreateSessionNetwork, deleteSessionNetwork, getNetworkName, cleanupOrphanedNetworks, getNetworkStats, getSubnetStats, getNetworkMetrics } from './networkManager';
 import { kernelManager } from './kernelManager';
 import { getWorkerPool, shutdownWorkerPool } from './workerPool';
+import { adminMetrics } from './adminMetrics';
+import adminRoutes from './adminRoutes';
 
 // Re-read environment variables into config after dotenv load
 (config.docker as any).memory = process.env.DOCKER_MEMORY || '512m';
@@ -61,6 +63,9 @@ const PORT = config.server.port;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Admin routes - protected by key authentication
+app.use('/admin', adminRoutes);
 
 export interface File {
   name: string;
@@ -245,6 +250,9 @@ const executionQueue = new ExecutionQueue(
   config.executionQueue.queueTimeout
 );
 
+// Export for admin routes
+export { executionQueue };
+
 // --- Worker Thread Pool (Optional) ---
 let workerPool: ReturnType<typeof getWorkerPool> | null = null;
 if (config.workerPool.enabled && config.workerPool.threads > 0) {
@@ -276,6 +284,10 @@ kernelManager.onCellComplete((kernelId, cellId) => {
 // --- WebSocket Handling ---
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
+  
+  // Track client connection
+  adminMetrics.trackClientConnected(socket.id);
+  
   let currentProcess: any = null;
   let tempDir: string | null = null;
   let containerId: string | null = null;
@@ -328,6 +340,10 @@ io.on('connection', (socket) => {
       currentSessionId = sessionId;
       manuallyStopped = false; // Reset flag for new execution
       const startTime = Date.now(); // Track execution start time
+      const executionId = `ws-${sessionId}-${startTime}`;
+      
+      // Track execution start
+      adminMetrics.trackExecutionStarted(executionId);
 
       const runtimeConfig = config.runtimes[language as keyof typeof config.runtimes];
       if (!runtimeConfig) {
@@ -495,6 +511,17 @@ io.on('connection', (socket) => {
             // Calculate execution time
             const executionTime = Date.now() - startTime;
             
+            // Track execution completion
+            adminMetrics.trackExecutionEnded(executionId);
+            adminMetrics.trackRequest({
+              type: 'websocket',
+              language: currentLanguage!,
+              executionTime,
+              success: code === 0,
+              sessionId,
+              clientId: socket.id,
+            });
+            
             // Only emit exit if not manually stopped (manual stop already emitted exit)
             if (!manuallyStopped) {
               socket.emit('exit', { sessionId, code, executionTime });
@@ -584,6 +611,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', async () => {
+    // Track client disconnection
+    adminMetrics.trackClientDisconnected(socket.id);
+    
     if (flushBufferTimer) {
       clearTimeout(flushBufferTimer);
     }
@@ -633,7 +663,10 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Network and subnet monitoring endpoint
+// NOTE: Network, cleanup, and queue stats moved to /admin routes with authentication
+// To access these endpoints, use: /admin/stats?key=<ADMIN_KEY>
+
+// Legacy endpoints (deprecated - use /admin/stats instead)
 app.get('/api/network-stats', async (req, res) => {
   try {
     const networkStats = await getNetworkStats();
@@ -771,6 +804,11 @@ app.post('/api/run', async (req, res) => {
 
   const startTime = Date.now();
   const sessionId = `api-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  const clientId = req.ip || req.socket.remoteAddress || 'unknown';
+  const executionId = `api-${sessionId}`;
+  
+  // Track execution start
+  adminMetrics.trackExecutionStarted(executionId);
   
   try {
     // Check queue capacity before accepting request
@@ -797,12 +835,35 @@ app.post('/api/run', async (req, res) => {
 
     const executionTime = Date.now() - startTime;
     
+    // Track execution completion
+    adminMetrics.trackExecutionEnded(executionId);
+    adminMetrics.trackRequest({
+      type: 'api',
+      language,
+      executionTime,
+      success: result.exitCode === 0,
+      sessionId,
+      clientId,
+    });
+    
     res.json({
       ...result,
       executionTime
     });
   } catch (error: any) {
     const executionTime = Date.now() - startTime;
+    
+    // Track failed execution
+    adminMetrics.trackExecutionEnded(executionId);
+    adminMetrics.trackRequest({
+      type: 'api',
+      language,
+      executionTime,
+      success: false,
+      sessionId,
+      clientId,
+    });
+    
     res.status(500).json({ 
       error: `Execution failed: ${error.message}`,
       executionTime
@@ -1096,6 +1157,21 @@ if (require.main === module) {
     const ttlCleanupTimer = setInterval(performContainerCleanup, containerCleanupInterval);
     const networkCleanupTimer = setInterval(performNetworkCleanup, networkCleanupInterval);
 
+    // Periodic server snapshots for admin dashboard (every minute)
+    const snapshotInterval = setInterval(() => {
+      const poolMetrics = sessionPool.getMetrics();
+      const queueStats = executionQueue.getStats();
+      const workerStats = workerPool && workerPool.isEnabled() 
+        ? workerPool.getStats() 
+        : { totalWorkers: 0, activeWorkers: 0 };
+      
+      adminMetrics.takeSnapshot(
+        workerStats.totalWorkers,
+        poolMetrics.totalActiveContainers,
+        queueStats.queued
+      );
+    }, 60000); // Every minute
+
     // Log network statistics every 5 minutes for monitoring
     const networkStatsInterval = setInterval(async () => {
       try {
@@ -1117,6 +1193,7 @@ if (require.main === module) {
       clearInterval(ttlCleanupTimer);
       clearInterval(networkCleanupTimer);
       clearInterval(networkStatsInterval);
+      clearInterval(snapshotInterval);
       
       // Shutdown worker pool if enabled
       if (workerPool && workerPool.isEnabled()) {

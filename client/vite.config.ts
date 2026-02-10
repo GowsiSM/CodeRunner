@@ -13,5 +13,32 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // Expose to all network interfaces
     port: 5173,
+    proxy: {
+      '/admin/stats': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/admin/metrics': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/admin/report': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/admin/reset': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/execute': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
 })
